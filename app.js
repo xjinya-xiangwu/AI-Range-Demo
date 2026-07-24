@@ -1,7 +1,10 @@
 /* ── AI Security Range 830 MVP Demo v3 · 应用逻辑 ───────────────
- * hash 路由 SPA + 左侧抽屉导航 + 任务中心（实时窗口）+ 模板市场
- * 路由表：#/tasks 任务中心（默认，靶场 hero landing）· #/training 训练任务 · #/range 靶场控制台 · #/marketplace 模板市场
- *         #/workbench 工作台 · #/result-detail 结果详情 · #/data 数据中心 · #/resources 资源中心
+ * hash 路由 SPA + 左侧抽屉导航（三大模块：靶场 / 训练场 / 资源中心）
+ * 靶场子 tab：#/tasks 任务中心（默认，数据仪表盘 + 靶场 demo 窗口）
+ *             #/data 任务结果管理 · #/drill 实战演练场（研发中）
+ * 靶场内页：#/range 靶场控制台（demo 窗口点入，导航不设入口）· #/marketplace 新建任务
+ *         #/workbench 工作台 · #/result-detail 结果详情
+ * 训练场：#/training 训练任务 · 资源中心：#/resources
  * 兼容：#/overview #/portal #/results → #/tasks；#/report → #/result-detail
  * ─────────────────────────────────────────────────────────────── */
 'use strict';
@@ -55,7 +58,7 @@ function closeModal() { $('#modal-root').innerHTML = ''; }
 
 /* ══ 路由 ═══════════════════════════════════════════════════════ */
 const ROUTE_ALIASES = { '': 'tasks', overview: 'tasks', portal: 'tasks', results: 'tasks', report: 'result-detail' };
-const NAV_OF = { tasks: 'tasks', training: 'training', range: 'range', marketplace: 'tasks', workbench: 'tasks', 'result-detail': 'tasks', data: 'data', resources: 'resources' };
+const NAV_OF = { tasks: 'tasks', training: 'training', range: 'tasks', marketplace: 'tasks', workbench: 'tasks', 'result-detail': 'tasks', data: 'data', drill: 'drill', resources: 'resources' };
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, '') || 'tasks';
   const [path, qs] = raw.split('?');
@@ -79,6 +82,7 @@ function router() {
   else if (r === 'marketplace') renderMarketplace();
   else if (r === 'result-detail') renderResultDetail();
   else if (r === 'data') renderData();
+  else if (r === 'drill') renderDrill();
   else if (r === 'resources') renderResources();
   else renderTasks();
   window.scrollTo(0, 0);
@@ -104,11 +108,10 @@ const levelBadge = (l) => l === '高'
 const catShort = (id) => (CATEGORIES.find((c) => c.id === id) || {}).short || id;
 
 /* ════════════════════════════════════════════════════════════════
- * 页面一 · 任务中心（默认）：运行中实时窗口 + 已完成任务
+ * 页面一 · 任务中心（默认，靶场首屏）
+ * 首屏：数据仪表盘（上）+ 靶场 demo 实时窗口（下，点入控制台）
+ * 下方：运行中任务（可空）+ 已完成任务列表（关键信息）
  * ════════════════════════════════════════════════════════════════ */
-/* 模拟运行窗状态（跨路由访问保持连续；纯演示，与真实引擎无关） */
-const sims = SIM_RUNS.map(() => ({ idx: 0, tick: 0, started: Date.now() }));
-
 function renderTasks() {
   const userRunning = sessionStorage.getItem('aisr-running') === '1';
   rangeState.scene = 'grid';
@@ -117,39 +120,43 @@ function renderTasks() {
     <div class="page-head-row">
       <div>
         <h2 class="page-title">任务中心</h2>
-        <p class="page-desc">常驻攻防靶场实例实时画面 · 评测任务与数据为配套辅助模块</p>
+        <p class="page-desc">靶场首屏 · 数据仪表盘与常驻攻防靶场 demo 实时画面，点击 demo 窗口进入靶场控制台</p>
       </div>
       <button class="btn btn-outline" id="btn-new-task">新建任务</button>
     </div>
-    ${rangeSectionHtml('grid', 'hero')}
+    <div class="history-head">数据仪表盘</div>
     <div class="stats-row">
       ${TASK_STATS.map(([label, num]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div></div>`).join('')}
     </div>
-    <div class="history-head">评测与攻防任务 · 运行中<span class="head-badge">${SIM_RUNS.length + (userRunning ? 1 : 0)} 个</span></div>
-    <div class="runwin-grid" id="runwin-grid" style="margin-bottom:32px"></div>
+    ${rangeSectionHtml('grid', 'hero')}
+    <div class="history-head" style="margin-top:32px">评测与攻防任务 · 运行中<span class="head-badge">${userRunning ? 1 : 0} 个</span></div>
+    <div id="runwin-wrap" style="margin-bottom:32px"></div>
     <div class="history-head">已完成任务</div>
-    <div class="done-grid" id="done-grid"></div>
+    <div class="done-list" id="done-list"></div>
   </div>`;
-  renderRunWins();
-  renderDoneGrid();
+  renderRunning();
+  renderDoneList();
   /* hero 为监控橱窗：无内部交互，整窗点击 / Enter 跳转靶场控制台 */
   const heroSec = $('#rg-hero-sec');
   heroSec.addEventListener('click', () => { location.hash = '#/range'; });
   heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter') location.hash = '#/range'; });
   paintRange('grid');
-  every(tickSims, 1000);
+  every(tickUserWin, 1000);
   every(tickRange, 1000);
   $('#btn-new-task').addEventListener('click', () => openMarketplace(null));
 }
 
-/* ── 运行中任务窗口 ───────────────────────────────────────────── */
-function renderRunWins() {
-  const grid = $('#runwin-grid');
-  let userWin = '';
-  if (sessionStorage.getItem('aisr-running') === '1') {
-    const cfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
-    const title = cfg ? resolveRunMeta(cfg).title : '未命名任务';
-    userWin = `
+/* ── 运行中任务区：仅展示用户自发起任务；无任务时留空 ──────────── */
+function renderRunning() {
+  const wrap = $('#runwin-wrap');
+  if (sessionStorage.getItem('aisr-running') !== '1') {
+    wrap.innerHTML = `<div class="runwin-empty">当前没有运行中的评测 / 攻防任务 · 点击右上角「新建任务」发起</div>`;
+    return;
+  }
+  const cfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
+  const title = cfg ? resolveRunMeta(cfg).title : '未命名任务';
+  wrap.innerHTML = `
+  <div class="runwin-grid">
     <div class="runwin" id="user-win">
       <div class="runwin-head">
         <span class="live-dot"></span>
@@ -161,89 +168,11 @@ function renderRunWins() {
         <div class="prog-track"><div class="prog-fill indet"></div></div>
         <div class="runwin-meta"><span>进行中…</span><span class="mono" id="user-win-time">00:00</span></div>
       </div>
-    </div>`;
-  }
-  grid.innerHTML = userWin + SIM_RUNS.map((s, i) => `
-    <div class="runwin" data-sim="${i}">
-      <div class="runwin-head">
-        <span class="live-dot"></span>
-        <span class="runwin-title">${esc(s.title)}</span>
-        <span class="badge ${s.category === 'redblue' ? 'badge-primary' : ''}">${catShort(s.category)}</span>
-      </div>
-      <div class="runwin-viz" id="sim-viz-${i}"></div>
-      <div class="runwin-foot">
-        <div class="prog-track"><div class="prog-fill" id="sim-fill-${i}"></div></div>
-        <div class="runwin-meta">
-          <span id="sim-step-${i}">初始化仿真环境…</span>
-          <span class="mono"><span id="sim-pct-${i}">0%</span> · <span id="sim-time-${i}">00:00</span></span>
-        </div>
-      </div>
-    </div>`).join('');
-  SIM_RUNS.forEach((_, i) => updateRunWin(i));
-  $$('[data-sim]').forEach((el) => el.addEventListener('click', () => enterSimRun(parseInt(el.dataset.sim, 10))));
-  const uw = $('#user-win');
-  if (uw) uw.addEventListener('click', () => { location.hash = '#/workbench'; });
+    </div>
+  </div>`;
+  $('#user-win').addEventListener('click', () => { location.hash = '#/workbench'; });
 }
-
-/* 模拟窗口的拓扑节点状态（复用剧本 nodes 补丁） */
-function simNodeStates(skinKey, upto) {
-  const skin = TOPO_SKINS[skinKey];
-  const nodes = Object.fromEntries(skin.nodes.map((n) => [n.id, 'idle']));
-  const RANK = { idle: 0, active: 1, detected: 2, owned: 3 };
-  for (let i = 0; i < upto && i < RB_STEPS.length; i++) {
-    Object.entries(RB_STEPS[i].nodes || {}).forEach(([gen, st]) => {
-      const mapped = skin.map[gen];
-      if (!mapped) return;
-      (Array.isArray(mapped) ? mapped : [mapped]).forEach((id) => {
-        if (RANK[st] >= RANK[nodes[id]]) nodes[id] = st;
-      });
-    });
-  }
-  return nodes;
-}
-
-function updateRunWin(i) {
-  const sim = SIM_RUNS[i], st = sims[i];
-  const isRB = sim.category === 'redblue';
-  const len = isRB ? RB_STEPS.length : EVAL_STEPS.length;
-  const cur = Math.min(st.idx, len);
-  const fillEl = $('#sim-fill-' + i);
-  if (!fillEl) return;
-  const pct = Math.round((cur / len) * 100);
-  fillEl.style.width = pct + '%';
-  $('#sim-pct-' + i).textContent = pct + '%';
-  $('#sim-time-' + i).textContent = fmtElapsed(Date.now() - st.started);
-  let label;
-  if (st.idx === 0) label = '初始化仿真环境…';
-  else if (st.idx > len) label = '剧本闭环 · 生成报告中…';
-  else if (isRB) { const s = RB_STEPS[st.idx - 1]; label = `当前：M${s.g} ${RB_GROUPS[s.g - 1].name}`; }
-  else label = `当前检测：${EVAL_STEPS[st.idx - 1].name}`;
-  $('#sim-step-' + i).textContent = label;
-  const viz = $('#sim-viz-' + i);
-  if (isRB) {
-    viz.innerHTML = `<div class="mini-topo">${buildTopoSvg(TOPO_SKINS[sim.cfg.simEnv], simNodeStates(sim.cfg.simEnv, cur), false)}</div>`;
-  } else {
-    const seen = EVAL_STEPS.slice(0, cur);
-    const f = seen.filter((s) => s.verdict === 'fail').length;
-    const p = seen.filter((s) => s.verdict === 'partial').length;
-    viz.innerHTML = `<div class="sim-risk">
-      <span>已检测 <b>${cur}/${len}</b></span>
-      <span>未通过 <b style="color:var(--destructive)">${f}</b></span>
-      <span>部分 <b style="color:var(--chart-4)">${p}</b></span>
-      <span>通过 <b style="color:var(--chart-3)">${cur - f - p}</b></span>
-    </div>`;
-  }
-}
-
-/* 每秒跳秒；每 3s 推进一步；剧本走完后停留片刻循环重播（演示） */
-function tickSims() {
-  sims.forEach((st, i) => {
-    const len = SIM_RUNS[i].category === 'redblue' ? RB_STEPS.length : EVAL_STEPS.length;
-    st.tick += 1;
-    if (st.tick % 3 === 0) st.idx += 1;
-    if (st.idx > len + 4) { st.idx = 0; st.started = Date.now(); }
-    updateRunWin(i);
-  });
+function tickUserWin() {
   const uw = $('#user-win-time');
   if (uw) {
     const t0 = parseInt(sessionStorage.getItem('aisr-runStart') || String(Date.now()), 10);
@@ -251,45 +180,32 @@ function tickSims() {
   }
 }
 
-/* 点击进入完整工作台（观察模式）；若用户自有任务在跑，以用户任务优先 */
-function enterSimRun(i) {
-  if (sessionStorage.getItem('aisr-running') === '1') { location.hash = '#/workbench'; return; }
-  sessionStorage.setItem('aisr-runCfg', JSON.stringify({ ...SIM_RUNS[i].cfg }));
-  sessionStorage.setItem('aisr-running', '1');
-  sessionStorage.setItem('aisr-runStart', String(Date.now()));
-  location.hash = '#/workbench';
-}
-
-/* ── 已完成任务卡（结论速览，点击进详情）───────────────────────── */
-function renderDoneGrid() {
+/* ── 已完成任务列表（关键信息行，点击进详情）────────────────────── */
+function renderDoneList() {
   const tasks = [...PRESET_RESULTS, ...HISTORY_TASKS];
-  $('#done-grid').innerHTML = tasks.map((t) => {
+  $('#done-list').innerHTML = tasks.map((t) => {
     const rec = synthRecord(t);
     const end = new Date(rec.endedAt);
     const stat3 = rec.category === 'eval'
       ? `检出风险点 <b>${rec.riskItems.filter((r) => r.verdict !== 'pass').length}</b> 项`
       : `攻陷里程碑 <b>${rec.groupsDone}/${rec.groupsTotal}</b>`;
     return `
-    <div class="card done-card" data-done="${t.id}">
-      <div class="env-card-head">
-        <span class="badge badge-primary">${catShort(rec.category)}</span>
-        <span class="badge ${rec.verdictClass === 'v-olive' ? 'badge-olive' : rec.verdictClass === 'v-gold' ? 'badge-gold' : 'badge-destructive'}">${rec.verdict}</span>
+    <div class="done-row" data-done="${t.id}">
+      <div class="dr-title">
+        <span>${esc(rec.title)}</span>
+        ${t.example ? '<span class="badge badge-example">示例</span>' : ''}
+        <span class="dr-id">${t.id}</span>
       </div>
-      <div class="env-title">${esc(rec.title)} ${t.example ? '<span class="badge badge-example">示例</span>' : ''}</div>
-      <div class="done-stats">
-        <span>得分 <b>${rec.score}</b></span>
-        <span>用时 <b>${fmtElapsed(rec.elapsedMs)}</b></span>
-        <span>${stat3}</span>
-      </div>
-      <div class="env-meta">
-        <span>${t.id}</span>
-        <span>${end.toLocaleDateString('zh-CN')} 完成</span>
-        <span>${esc(executorLabel(rec))}</span>
-      </div>
-      <div class="env-actions">
+      <span class="badge badge-primary">${catShort(rec.category)}</span>
+      <span class="badge ${rec.verdictClass === 'v-olive' ? 'badge-olive' : rec.verdictClass === 'v-gold' ? 'badge-gold' : 'badge-destructive'}">${rec.verdict}</span>
+      <span class="dr-cell">得分 <b>${rec.score}</b></span>
+      <span class="dr-cell">用时 <b>${fmtElapsed(rec.elapsedMs)}</b></span>
+      <span class="dr-cell">${stat3}</span>
+      <span class="dr-cell">${end.toLocaleDateString('zh-CN')} · ${esc(executorLabel(rec))}</span>
+      <span class="dr-actions">
         <button class="btn btn-ghost btn-sm" data-again="${t.id}">再次启动</button>
         <button class="btn btn-outline btn-sm" data-report2="${t.id}">查看报告</button>
-      </div>
+      </span>
     </div>`;
   }).join('');
   const openReport = (id) => {
@@ -900,6 +816,7 @@ function renderRange() {
   const sceneKey = rangeState.scene;
   $('#view').innerHTML = `
   <div class="page range-console">
+    <div style="margin-bottom:16px"><a href="#/tasks" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
     <div class="page-head-row">
       <div>
         <h2 class="page-title">靶场控制台</h2>
@@ -920,6 +837,26 @@ function renderRange() {
   bindRangeHud(sceneKey);
   paintRange(sceneKey);
   every(tickRange, 1000);
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * 靶场子 tab · 实战演练场（研发中占位页）
+ * ════════════════════════════════════════════════════════════════ */
+function renderDrill() {
+  $('#view').innerHTML = `
+  <div class="page">
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">实战演练场 <span class="badge badge-gold" style="vertical-align:middle">研发中</span></h2>
+        <p class="page-desc">多人协同实战攻防演练 · 红蓝对抗编排与实时裁决（能力规划中，暂未开放）</p>
+      </div>
+    </div>
+    <div class="empty-state">
+      <span class="serif">实战演练场 · 研发中</span>
+      <p>该模块正在建设中，将支持多队伍红蓝对抗、演练编排、实时裁决与复盘回放。<br>当前版本请通过「任务中心」发起单人评测 / 攻防任务，或在「靶场控制台」观察常驻攻防实例。</p>
+      <a class="btn btn-outline" href="#/tasks">返回任务中心</a>
+    </div>
+  </div>`;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -2594,7 +2531,7 @@ function renderData() {
   <div class="page">
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">数据中心</h2>
+        <h2 class="page-title">任务结果管理</h2>
         <p class="page-desc">任务回流的轨迹 / 报告 / 题库资产总览</p>
       </div>
       <span class="badge ${UC_ROLES[role].badgeCls}">当前角色 ${role}</span>

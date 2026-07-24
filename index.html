@@ -23,26 +23,32 @@
         </div>
       </div>
       <nav class="sb-nav" id="sidenav">
-        <a href="#/tasks" data-route="tasks">
+        <!-- 模块一 · 靶场（含三个子 tab） -->
+        <div class="sb-group-label">靶场</div>
+        <a href="#/tasks" data-route="tasks" class="sb-sub">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="5.5" height="5.5"/><rect x="9" y="1.5" width="5.5" height="5.5"/><rect x="1.5" y="9" width="5.5" height="5.5"/><rect x="9" y="9" width="5.5" height="5.5"/></svg>
           <span class="sb-label">任务中心</span><span class="run-dot" id="run-dot" style="display:none"></span>
-          <span class="sb-tip">任务中心</span>
+          <span class="sb-tip">靶场 · 任务中心</span>
         </a>
+        <a href="#/data" data-route="data" class="sb-sub">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.5" rx="6" ry="2.5"/><path d="M2 3.5v9c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-9"/><path d="M2 8c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/></svg>
+          <span class="sb-label">任务结果管理</span>
+          <span class="sb-tip">靶场 · 任务结果管理</span>
+        </a>
+        <a href="#/drill" data-route="drill" class="sb-sub">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.6"/><path d="M8 1v2.4M8 12.6V15M1 8h2.4M12.6 8H15"/></svg>
+          <span class="sb-label">实战演练场</span><span class="sb-badge">研发中</span>
+          <span class="sb-tip">靶场 · 实战演练场（研发中）</span>
+        </a>
+        <div class="sb-sep"></div>
+        <!-- 模块二 · 训练场 -->
         <a href="#/training" data-route="training">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4.5h4.2M2 8h7.4M2 11.5H14"/><circle cx="11.5" cy="4.5" r="2.2"/><circle cx="11.5" cy="8" r="2.2"/><circle cx="11.5" cy="11.5" r="2.2"/></svg>
-          <span class="sb-label">训练任务</span>
-          <span class="sb-tip">训练任务</span>
+          <span class="sb-label">训练场</span>
+          <span class="sb-tip">训练场</span>
         </a>
-        <a href="#/range" data-route="range">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.6"/><path d="M8 1v2.4M8 12.6V15M1 8h2.4M12.6 8H15"/></svg>
-          <span class="sb-label">靶场控制台</span>
-          <span class="sb-tip">靶场控制台</span>
-        </a>
-        <a href="#/data" data-route="data">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.5" rx="6" ry="2.5"/><path d="M2 3.5v9c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-9"/><path d="M2 8c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/></svg>
-          <span class="sb-label">数据中心</span>
-          <span class="sb-tip">数据中心</span>
-        </a>
+        <div class="sb-sep"></div>
+        <!-- 模块三 · 资源中心 -->
         <a href="#/resources" data-route="resources">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="12" height="5"/><rect x="2" y="9" width="12" height="5"/><circle cx="4.6" cy="4.5" r=".9" fill="currentColor" stroke="none"/><circle cx="4.6" cy="11.5" r=".9" fill="currentColor" stroke="none"/></svg>
           <span class="sb-label">资源中心</span>

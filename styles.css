@@ -70,6 +70,20 @@ body {
   border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg);
 }
 
+/* 三大模块分组：组标签 / 明确分割线 / 子 tab 缩进 */
+.sb-group-label {
+  padding: 12px 10px 4px; font-size: 11px; font-weight: 600;
+  color: var(--muted-foreground); letter-spacing: .12em;
+}
+.sb-sep { height: 1px; margin: 10px 4px; background: var(--sidebar-border); }
+.sb-nav a.sb-sub { padding-left: 26px; font-size: 12.5px; }
+.sb-badge {
+  margin-left: auto; flex: none; padding: 1px 6px; font-size: 10px; line-height: 1.5;
+  color: var(--muted-foreground); border: 1px solid var(--sidebar-border); border-radius: 999px;
+}
+.sidebar.collapsed .sb-group-label, .sidebar.collapsed .sb-badge { display: none; }
+.sidebar.collapsed .sb-nav a.sb-sub { padding-left: 0; }
+
 .sb-spacer { flex: 1; }
 .sb-collapse {
   display: flex; align-items: center; gap: 10px; margin: 0 8px 6px; padding: 9px 10px;
@@ -595,6 +609,8 @@ body {
   .mode-cards { grid-template-columns: 1fr; }
   .wb-grid { grid-template-columns: 1fr; }
   .wb-col-left { display: none; }
+  .done-row { grid-template-columns: 1fr auto; row-gap: 6px; }
+  .done-row .dr-cell, .done-row .dr-id { display: none; }
 }
 
 /* ── 页头行（标题 + 主操作）──────────────────────────────────── */
@@ -643,6 +659,27 @@ body {
 .done-card:hover { border-color: var(--primary); }
 .done-stats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted-foreground); }
 .done-stats b { color: var(--foreground); font-weight: 500; font-family: var(--font-mono); }
+
+/* ── 任务中心 · 已完成任务列表（关键信息行）────────────────────── */
+.done-list { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.done-row {
+  display: grid; grid-template-columns: minmax(220px, 2.2fr) 84px 84px 70px 80px minmax(130px, 1.2fr) 110px auto;
+  align-items: center; gap: 14px; padding: 12px 8px;
+  border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s;
+}
+.done-row:hover { background: var(--accent); }
+.done-row .dr-title { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.done-row .dr-title span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.done-row .dr-id { font-size: 11px; color: var(--muted-foreground); font-family: var(--font-mono); }
+.done-row .dr-cell { font-size: 12px; color: var(--muted-foreground); }
+.done-row .dr-cell b { color: var(--foreground); font-weight: 500; font-family: var(--font-mono); }
+.done-row .dr-actions { display: flex; gap: 8px; justify-content: flex-end; }
+/* 运行中任务空态 */
+.runwin-empty {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 36px 20px; font-size: 13px; color: var(--muted-foreground);
+  border: 1px dashed var(--border); border-radius: var(--radius); background: var(--card);
+}
 
 /* ── 模板市场 ────────────────────────────────────────────────── */
 .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
