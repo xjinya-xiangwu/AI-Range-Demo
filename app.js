@@ -1,6 +1,6 @@
 /* ── AI Security Range 830 MVP Demo v3 · 应用逻辑 ───────────────
  * hash 路由 SPA + 左侧抽屉导航 + 任务中心（实时窗口）+ 模板市场
- * 路由表：#/tasks 任务中心（默认，靶场 hero landing）· #/range 靶场控制台 · #/marketplace 模板市场
+ * 路由表：#/tasks 任务中心（默认，靶场 hero landing）· #/training 训练任务 · #/range 靶场控制台 · #/marketplace 模板市场
  *         #/workbench 工作台 · #/result-detail 结果详情 · #/data 数据中心 · #/resources 资源中心
  * 兼容：#/overview #/portal #/results → #/tasks；#/report → #/result-detail
  * ─────────────────────────────────────────────────────────────── */
@@ -55,7 +55,7 @@ function closeModal() { $('#modal-root').innerHTML = ''; }
 
 /* ══ 路由 ═══════════════════════════════════════════════════════ */
 const ROUTE_ALIASES = { '': 'tasks', overview: 'tasks', portal: 'tasks', results: 'tasks', report: 'result-detail' };
-const NAV_OF = { tasks: 'tasks', range: 'range', marketplace: 'tasks', workbench: 'tasks', 'result-detail': 'tasks', data: 'data', resources: 'resources' };
+const NAV_OF = { tasks: 'tasks', training: 'training', range: 'range', marketplace: 'tasks', workbench: 'tasks', 'result-detail': 'tasks', data: 'data', resources: 'resources' };
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, '') || 'tasks';
   const [path, qs] = raw.split('?');
@@ -64,6 +64,7 @@ function parseHash() {
   return { route: path || 'tasks', params };
 }
 function router() {
+  window.TrainingPipeline.unmount();
   clearTimers(); closeModal(); closeUserPop(); closeDlPop(); hideTopoTip(); closeRgPops();
   const { route } = parseHash();
   /* 工作台运行中小圆点（sidebar · 任务中心项） */
@@ -72,7 +73,8 @@ function router() {
   const r = ROUTE_ALIASES[route] || route;
   const nav = NAV_OF[r] || 'tasks';
   $$('#sidenav a').forEach((a) => a.classList.toggle('active', a.dataset.route === nav));
-  if (r === 'workbench') renderWorkbench();
+  if (r === 'training') renderTrainingPipeline();
+  else if (r === 'workbench') renderWorkbench();
   else if (r === 'range') renderRange();
   else if (r === 'marketplace') renderMarketplace();
   else if (r === 'result-detail') renderResultDetail();
@@ -80,6 +82,10 @@ function router() {
   else if (r === 'resources') renderResources();
   else renderTasks();
   window.scrollTo(0, 0);
+}
+
+function renderTrainingPipeline() {
+  window.TrainingPipeline.mount($('#view'));
 }
 
 /* ══ 徽标工具 ═══════════════════════════════════════════════════ */
