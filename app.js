@@ -1,8 +1,8 @@
 /* ── AI Security Range 830 MVP Demo v3 · 应用逻辑 ───────────────
  * hash 路由 SPA + 左侧抽屉导航（两大区块：操作区 / 资源区）
- * 操作区 · 靶场子 tab：#/range-tasks 靶场任务（默认，介绍型首页）
- *             #/eval-tasks 评测任务（介绍型首页）· #/drill 实战演练场任务（研发中）
- * 操作区 · 训练场：#/training（数据产出仪表盘 + 介绍瀑布流）
+ * 操作区 · 操作中心三 tab：测试场（#/range-tasks 靶场任务为默认页 · #/eval-tasks 评测任务）
+ *             训练场 #/training（数据产出仪表盘 + 训练演示窗 + 介绍瀑布流）
+ *             实战场 #/drill 实战演练场任务（研发中，位于操作区最后一个 tab）
  * 资源区 · 资源中心：#/assets 资产中心（展示页）· #/system 系统配置
  * 任务流：#/marketplace 新建任务（评测/靶场攻防）· #/train-new 新建训练任务
  *         #/tasks 任务中心 · #/workbench 评测控制台 · #/range 靶场控制台
@@ -61,7 +61,7 @@ function closeModal() { $('#modal-root').innerHTML = ''; }
 /* ══ 路由 ═══════════════════════════════════════════════════════ */
 const ROUTE_ALIASES = { '': 'range-tasks', overview: 'range-tasks', portal: 'range-tasks', results: 'range-tasks', data: 'assets', resources: 'assets', report: 'result-detail' };
 const NAV_OF = {
-  'range-tasks': 'range-tasks', 'eval-tasks': 'eval-tasks', drill: 'drill', training: 'training',
+  'range-tasks': 'range-tasks', 'eval-tasks': 'range-tasks', drill: 'drill', training: 'training',
   assets: 'assets', system: 'system',
   tasks: 'range-tasks', marketplace: 'range-tasks', workbench: 'range-tasks', range: 'range-tasks', 'result-detail': 'range-tasks',
   'train-new': 'training', 'training-console': 'training',
@@ -242,13 +242,105 @@ function statCardsHtml(stats, compact) {
   return `<div class="stats-row${compact ? ' compact' : ''}">${stats.map(([label, num]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div></div>`).join('')}</div>`;
 }
 
+/* 训练流程模拟演示窗：训练步骤 + 训练进度（epoch / loss / reward），走完循环重播 */
+const TRAIN_LOOP_STEPS = [
+  { name: '数据装载', desc: '加载漏洞攻防全链数据集 · 5K 条样本' },
+  { name: '环境初始化', desc: '拉起 64 个并发训练容器 · 靶场环境就绪' },
+  { name: '对抗训练', desc: '红队对齐训练 · epoch 逐轮推进' },
+  { name: '评估验证', desc: '验证集攻击成功率与回归测试' },
+  { name: '资产归档', desc: '模型权重与轨迹数据集归档资产中心' },
+];
+const trainSim = { tick: 0 };
+const TRAIN_LOOP_TICKS = 84;
+function trainLoopHtml() {
+  return `
+  <div class="vc-wrap">
+    <div class="video-chrome"><span class="vc-rec"></span><span>训练任务演示 · 循环播放</span><span class="vc-tag mono">TRAIN&nbsp;LOOP</span></div>
+    <section class="card eval-loop">
+      <div class="el-head">
+        <span class="live-dot"></span>
+        <span class="el-title">PentestGPT-Attack-v3 · 红队对齐训练</span>
+        <span class="badge badge-primary">训练任务</span>
+        <span class="env-status"><span class="dot dot-ok"></span>运行中</span>
+        <span class="el-time mono" id="tl-time">00:00</span>
+      </div>
+      <div class="el-body">
+        <div>
+          <div class="el-pct" id="tl-pct">0%</div>
+          <div class="prog-track" style="margin-top:6px"><div class="prog-fill" id="tl-fill" style="width:0%"></div></div>
+          <div class="el-cur" id="tl-cur">初始化训练任务…</div>
+          <div class="el-counts" id="tl-counts"></div>
+        </div>
+        <div class="el-steps" id="tl-steps"></div>
+      </div>
+      <div class="el-foot" id="tl-foot">训练引擎就绪，等待数据装载…</div>
+    </section>
+  </div>`;
+}
+function bindTrainLoop() {
+  paintTrainLoop();
+  every(tickTrainLoop, 1000);
+}
+function tickTrainLoop() {
+  trainSim.tick += 1;
+  if (trainSim.tick > TRAIN_LOOP_TICKS) trainSim.tick = 0;
+  paintTrainLoop();
+}
+function trainStepOf(tick) {
+  if (tick < 5) return 0;
+  if (tick < 10) return 1;
+  if (tick < 70) return 2;
+  if (tick < 79) return 3;
+  return 4;
+}
+function paintTrainLoop() {
+  const fill = $('#tl-fill');
+  if (!fill) return;
+  const tick = trainSim.tick;
+  const step = trainStepOf(tick);
+  const done = tick >= TRAIN_LOOP_TICKS;
+  const epoch = Math.max(0, Math.min(12, Math.floor((tick - 10) / 5)));
+  const loss = (2.4 - (epoch / 12) * 2.22).toFixed(3);
+  const reward = (0.12 + (epoch / 12) * 0.75).toFixed(2);
+  const pct = done ? 100 : Math.round((tick / TRAIN_LOOP_TICKS) * 100);
+  fill.style.width = pct + '%';
+  $('#tl-pct').textContent = pct + '%';
+  $('#tl-time').textContent = fmtElapsed(tick * 1000);
+  $('#tl-cur').innerHTML = done
+    ? '训练完成 · 模型权重与轨迹数据集已归档'
+    : `当前步骤：<b>${TRAIN_LOOP_STEPS[step].name}</b> · ${TRAIN_LOOP_STEPS[step].desc}`;
+  $('#tl-counts').innerHTML = `
+    <span>epoch <b>${epoch}/12</b></span>
+    <span>loss <b style="color:var(--chart-1)">${loss}</b></span>
+    <span>reward <b style="color:var(--chart-3)">${reward}</b></span>
+    <span>并发容器 <b>64</b></span>`;
+  $('#tl-steps').innerHTML = TRAIN_LOOP_STEPS.map((s, i) => {
+    const st = done || i < step ? 'done' : i === step ? 'cur' : 'todo';
+    const mark = st === 'done' ? '✓' : st === 'cur' ? '▸' : '·';
+    return `<div class="el-step${st === 'cur' ? ' cur' : ''}"><span class="el-mark${st === 'done' ? ' v-pass' : ''}">${mark}</span>${s.name}</div>`;
+  }).join('');
+  $('#tl-foot').textContent = done
+    ? `[${fmtClock(new Date())}] 训练闭环 · 产出模型权重 v3.${Math.floor(tick / 10)} 与轨迹数据集 · 演示循环重播`
+    : step === 2
+      ? `[${fmtClock(new Date())}] epoch ${epoch}/12 · loss ${loss} · reward ${reward} · 梯度更新正常`
+      : `[${fmtClock(new Date())}] ${TRAIN_LOOP_STEPS[step].desc}`;
+}
+
+function testfieldTabsHtml(active) {
+  return `
+  <div class="range-tabs">
+    <a class="range-tab${active === 'range' ? ' active' : ''}" href="#/range-tasks">靶场任务</a>
+    <a class="range-tab${active === 'eval' ? ' active' : ''}" href="#/eval-tasks">评测任务</a>
+  </div>`;
+}
+
 function renderRangeLanding() {
   rangeState.scene = 'grid';
   $('#view').innerHTML = `
   <div class="page">
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">靶场任务</h2>
+        <h2 class="page-title">测试场 · 靶场任务</h2>
         <p class="page-desc">高仿真攻防靶场 · 红蓝对抗与渗透演练任务入口</p>
       </div>
       <div style="display:flex;gap:10px">
@@ -256,6 +348,7 @@ function renderRangeLanding() {
         <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
       </div>
     </div>
+    ${testfieldTabsHtml('range')}
     <div class="history-head">数据仪表盘</div>
     ${statCardsHtml(TASK_STATS, true)}
     ${demoLoopHtml()}
@@ -270,7 +363,7 @@ function renderEvalLanding() {
   <div class="page">
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">评测任务</h2>
+        <h2 class="page-title">测试场 · 评测任务</h2>
         <p class="page-desc">面向大模型与智能体的风险点全量评测 · 报告与错题集自动归集</p>
       </div>
       <div style="display:flex;gap:10px">
@@ -278,6 +371,7 @@ function renderEvalLanding() {
         <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
       </div>
     </div>
+    ${testfieldTabsHtml('eval')}
     <div class="history-head">数据仪表盘</div>
     ${statCardsHtml(EVAL_STATS, true)}
     ${evalLoopHtml()}
@@ -302,8 +396,10 @@ function renderTrainingLanding() {
     </div>
     <div class="history-head">数据产出仪表盘</div>
     ${statCardsHtml(TRAIN_STATS, true)}
+    ${trainLoopHtml()}
     ${introWaterfallHtml('关于训练场', TRAIN_INTRO)}
   </div>`;
+  bindTrainLoop();
   $('#btn-new-train').addEventListener('click', () => { location.hash = '#/train-new'; });
 }
 
@@ -323,9 +419,15 @@ function renderTasks() {
   $('#view').innerHTML = `
   <div class="page">
     <div class="page-head-row">
-      <div>
-        <h2 class="page-title">任务中心</h2>
-        <p class="page-desc">评测 / 靶场攻防 / 训练任务的统一运行视图 · 点击运行中窗口进入对应任务控制台</p>
+      <div class="page-head-left">
+        <a class="btn-back" href="#/range-tasks" title="返回首页（靶场任务）">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5 4.5 8l5.5 5.5"/></svg>
+          <span>返回首页</span>
+        </a>
+        <div>
+          <h2 class="page-title">任务中心</h2>
+          <p class="page-desc">评测 / 靶场攻防 / 训练任务的统一运行视图 · 点击运行中窗口进入对应任务控制台</p>
+        </div>
       </div>
       <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
     </div>
@@ -758,7 +860,7 @@ function paintRange(sceneKey) {
   if (hg) hg.innerHTML = sc.params.map((p, i) =>
     `<span class="hg-item"><span class="hg-k">${p.label}</span><span class="hg-v${p.alert ? ' alert' : ''}">${rangeParamVal(sceneKey, p, i, live.tick)}</span></span>`).join('');
   const log = $('#rg-log');
-  if (log) log.innerHTML = live.lines.slice(-8).map((l) =>
+  if (log) log.innerHTML = live.lines.slice(-5).map((l) =>
     `<div class="rg-log-line"><span class="lg-t">[${l.t}]</span>${esc(l.text)}</div>`).join('');
 }
 function tickRange() {
@@ -1369,7 +1471,7 @@ function tickTrainingConsole(cfg, t0) {
   $('#trc-elapsed').textContent = fmtElapsed(Date.now() - t0);
   trc.lines.push(`[${fmtClock(new Date())}] epoch ${ep}/${total} · loss ${loss.toFixed(3)} · reward ${reward.toFixed(2)} · grad_norm ${(0.8 + Math.sin(trc.tick) * 0.2).toFixed(2)} · ckpt 自动保存`);
   if (trc.lines.length > 40) trc.lines = trc.lines.slice(-40);
-  $('#trc-log').innerHTML = trc.lines.slice(-8).map((l) => `<div><span class="lg-t">${l.slice(0, 11)}</span>${esc(l.slice(11))}</div>`).join('');
+  $('#trc-log').innerHTML = trc.lines.slice(-5).map((l) => `<div><span class="lg-t">${l.slice(0, 11)}</span>${esc(l.slice(11))}</div>`).join('');
 }
 
 const mpChips = (id, options, cur) => `<div class="radio-row" id="${id}">${options.map((o) =>
