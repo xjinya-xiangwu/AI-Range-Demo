@@ -1,11 +1,13 @@
 /* ── AI Security Range 830 MVP Demo v3 · 应用逻辑 ───────────────
- * hash 路由 SPA + 左侧抽屉导航（三大模块：靶场 / 训练场 / 资源中心）
- * 靶场子 tab：#/tasks 任务中心（默认，数据仪表盘 + 靶场 demo 窗口）
- *             #/data 任务结果管理 · #/drill 实战演练场（研发中）
- * 靶场内页：#/range 靶场控制台（demo 窗口点入，导航不设入口）· #/marketplace 新建任务
- *         #/workbench 工作台 · #/result-detail 结果详情
- * 训练场：#/training 训练任务 · 资源中心：#/resources
- * 兼容：#/overview #/portal #/results → #/tasks；#/report → #/result-detail
+ * hash 路由 SPA + 左侧抽屉导航（两大区块：操作区 / 资源区）
+ * 操作区 · 靶场子 tab：#/range-tasks 靶场任务（默认，介绍型首页）
+ *             #/eval-tasks 评测任务（介绍型首页）· #/drill 实战演练场任务（研发中）
+ * 操作区 · 训练场：#/training（数据产出仪表盘 + 介绍瀑布流）
+ * 资源区 · 资源中心：#/assets 资产中心（展示页）· #/system 系统配置
+ * 任务流：#/marketplace 新建任务（评测/靶场攻防）· #/train-new 新建训练任务
+ *         #/tasks 任务中心 · #/workbench 评测控制台 · #/range 靶场控制台
+ *         #/training-console 训练控制台 · #/result-detail 结果详情
+ * 兼容：#/overview #/portal #/results → #/range-tasks；#/data #/resources → #/assets；#/report → #/result-detail
  * ─────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -57,39 +59,44 @@ function openModal(html, wide) {
 function closeModal() { $('#modal-root').innerHTML = ''; }
 
 /* ══ 路由 ═══════════════════════════════════════════════════════ */
-const ROUTE_ALIASES = { '': 'tasks', overview: 'tasks', portal: 'tasks', results: 'tasks', report: 'result-detail' };
-const NAV_OF = { tasks: 'tasks', training: 'training', range: 'tasks', marketplace: 'tasks', workbench: 'tasks', 'result-detail': 'tasks', data: 'data', drill: 'drill', resources: 'resources' };
+const ROUTE_ALIASES = { '': 'range-tasks', overview: 'range-tasks', portal: 'range-tasks', results: 'range-tasks', data: 'assets', resources: 'assets', report: 'result-detail' };
+const NAV_OF = {
+  'range-tasks': 'range-tasks', 'eval-tasks': 'eval-tasks', drill: 'drill', training: 'training',
+  assets: 'assets', system: 'system',
+  tasks: 'range-tasks', marketplace: 'range-tasks', workbench: 'range-tasks', range: 'range-tasks', 'result-detail': 'range-tasks',
+  'train-new': 'training', 'training-console': 'training',
+};
 function parseHash() {
-  const raw = location.hash.replace(/^#\/?/, '') || 'tasks';
+  const raw = location.hash.replace(/^#\/?/, '') || 'range-tasks';
   const [path, qs] = raw.split('?');
   const params = {};
   if (qs) qs.split('&').forEach((kv) => { const [k, v] = kv.split('='); params[k] = decodeURIComponent(v || ''); });
-  return { route: path || 'tasks', params };
+  return { route: path || 'range-tasks', params };
 }
 function router() {
   window.TrainingPipeline.unmount();
   clearTimers(); closeModal(); closeUserPop(); closeDlPop(); hideTopoTip(); closeRgPops();
   const { route } = parseHash();
-  /* 工作台运行中小圆点（sidebar · 任务中心项） */
+  /* 运行中任务小圆点（sidebar · 靶场任务项） */
   const dot = $('#run-dot');
   if (dot) dot.style.display = sessionStorage.getItem('aisr-running') === '1' ? '' : 'none';
   const r = ROUTE_ALIASES[route] || route;
-  const nav = NAV_OF[r] || 'tasks';
+  const nav = NAV_OF[r] || 'range-tasks';
   $$('#sidenav a').forEach((a) => a.classList.toggle('active', a.dataset.route === nav));
-  if (r === 'training') renderTrainingPipeline();
+  if (r === 'eval-tasks') renderEvalLanding();
+  else if (r === 'training') renderTrainingLanding();
+  else if (r === 'train-new') renderTrainNew();
+  else if (r === 'training-console') renderTrainingConsole();
   else if (r === 'workbench') renderWorkbench();
   else if (r === 'range') renderRange();
   else if (r === 'marketplace') renderMarketplace();
   else if (r === 'result-detail') renderResultDetail();
-  else if (r === 'data') renderData();
+  else if (r === 'assets') renderAssets();
+  else if (r === 'system') renderSystem();
   else if (r === 'drill') renderDrill();
-  else if (r === 'resources') renderResources();
-  else renderTasks();
+  else if (r === 'tasks') renderTasks();
+  else renderRangeLanding();
   window.scrollTo(0, 0);
-}
-
-function renderTrainingPipeline() {
-  window.TrainingPipeline.mount($('#view'));
 }
 
 /* ══ 徽标工具 ═══════════════════════════════════════════════════ */
@@ -108,82 +115,317 @@ const levelBadge = (l) => l === '高'
 const catShort = (id) => (CATEGORIES.find((c) => c.id === id) || {}).short || id;
 
 /* ════════════════════════════════════════════════════════════════
- * 页面一 · 任务中心（默认，靶场首屏）
- * 首屏：数据仪表盘（上）+ 靶场 demo 实时窗口（下，点入控制台）
- * 下方：运行中任务（可空）+ 已完成任务列表（关键信息）
+ * Landing 页 · 靶场任务 / 评测任务 / 训练场（介绍型首页）
+ * 首屏：数据仪表盘 + 循环播放的靶场动态演示窗；下方文字介绍瀑布流
  * ════════════════════════════════════════════════════════════════ */
-function renderTasks() {
-  const userRunning = sessionStorage.getItem('aisr-running') === '1';
+const RANGE_INTRO = [
+  { t: '高仿真攻防场景', d: '电网调度中心、核电指挥中心双场景 1:1 拓扑还原，DMZ 暴露面、SCADA / EMS / 保护装置分区纵深，攻击路径与真实工控网络一致。', tags: ['电网调度', '核电指挥', '分区纵深'] },
+  { t: '智能体并发对抗', d: '红队攻击智能体与蓝队防御智能体同场博弈，攻击规划、载荷投递与防御注入实时演化，支持并发规模与环境参数调节。', tags: ['攻击编排', '防御注入', '并发调度'] },
+  { t: '杀伤链实时可视化', d: '侦察探测 → 漏洞利用 → 权限提升 → 横向移动 → 目标达成 → 痕迹清理六阶段推进，渗透深度与节点状态逐跳可见。', tags: ['渗透深度', '节点状态', '攻击路径'] },
+  { t: '轨迹数据全量回流', d: '每一次对抗产出结构化攻防轨迹与可视化报告，自动归档至资产中心，直接沉淀为训练与评测语料。', tags: ['轨迹回放', '报告归档', '数据闭环'] },
+];
+const EVAL_INTRO = [
+  { t: '风险点全覆盖', d: '15 大类风险点库覆盖越权操作、提示注入、数据泄露、资源滥用等维度，评测项与红线标准持续对齐。', tags: ['15 大类', '红线对齐', '持续更新'] },
+  { t: '标准题库体系', d: '24 套题库对齐 OWASP LLM Top10、AgentHarm、InjecAgent 等公开基准，含自研 Mythos 安全红线全集。', tags: ['OWASP', 'AgentHarm', 'InjecAgent'] },
+  { t: '动态攻击方法', d: '直接注入、间接注入、多轮诱导、角色扮演、编码绕过五种攻击方法组合施压，支持多轮次动态题面生成。', tags: ['多轮诱导', '角色扮演', '编码绕过'] },
+  { t: '报告与错题集', d: '逐项判定并留存证据链，未通过项自动归集为错题集，回流训练场形成「评测 — 训练 — 复测」闭环。', tags: ['证据留存', '错题归集', '复测闭环'] },
+];
+const TRAIN_INTRO = [
+  { t: '多链数据合成', d: '漏洞攻防全链、企业攻防链路、蓝队安全运营、事件响应与修复、AI 业务链安全五条异构生产线持续产出训练资产。', tags: ['5 条生产线', '异构合成', '持续产出'] },
+  { t: '弹性并发调度', d: '按任务重量弹性分配容器资源，瓶颈线路可视化标注，吞吐曲线逐分钟可追踪。', tags: ['弹性调度', '瓶颈可视', '吞吐追踪'] },
+  { t: '目标导向训练', d: '攻击能力强化、防御策略优化、漏洞利用专精、红队对齐训练四类目标，参数化配置即建即训。', tags: ['攻击强化', '防御优化', '红队对齐'] },
+  { t: '与靶场评测闭环', d: '训练产出的数据集与靶场环境直接供给评测任务，训练效果在靶场中量化验证并回流。', tags: ['资产直供', '效果验证', '数据回流'] },
+];
+function introWaterfallHtml(title, blocks) {
+  return `
+  <div class="history-head" style="margin-top:32px">${title}</div>
+  <div class="intro-flow">
+    ${blocks.map((b, i) => `
+    <div class="intro-card${i % 2 ? ' alt' : ''}">
+      <div class="intro-no serif">${pad2(i + 1)}</div>
+      <div>
+        <div class="intro-title">${b.t}</div>
+        <p class="intro-desc">${b.d}</p>
+        <div class="intro-tags">${b.tags.map((t) => `<span class="badge">${t}</span>`).join('')}</div>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+/* 循环演示窗：视频窗 chrome + 靶场 hero（整窗点击进入控制台） */
+function demoLoopHtml() {
+  return `
+  <div class="vc-wrap">
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时演示 · 循环播放</span><span class="vc-tag mono">DEMO&nbsp;LOOP</span></div>
+    ${rangeSectionHtml('grid', 'hero')}
+  </div>`;
+}
+function bindDemoLoop() {
+  const heroSec = $('#rg-hero-sec');
+  heroSec.addEventListener('click', () => { location.hash = '#/range'; });
+  heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter') location.hash = '#/range'; });
+  paintRange('grid');
+  every(tickRange, 1000);
+}
+/* 评测流程模拟演示窗：进度条 + 检测项清单 + 判定徽标，走完循环重播 */
+const evalSim = { tick: 0, idx: 0 };
+function evalLoopHtml() {
+  return `
+  <div class="vc-wrap">
+    <div class="video-chrome"><span class="vc-rec"></span><span>评测流程演示 · 循环播放</span><span class="vc-tag mono">EVAL&nbsp;LOOP</span></div>
+    <section class="card eval-loop">
+      <div class="el-head">
+        <span class="live-dot"></span>
+        <span class="el-title">GPT-4o 风险点全量评测 · 智能体执行</span>
+        <span class="badge badge-primary">评测任务</span>
+        <span class="env-status"><span class="dot dot-ok"></span>运行中</span>
+        <span class="el-time mono" id="el-time">00:00</span>
+      </div>
+      <div class="el-body">
+        <div>
+          <div class="el-pct" id="el-pct">0%</div>
+          <div class="prog-track" style="margin-top:6px"><div class="prog-fill" id="el-fill" style="width:0%"></div></div>
+          <div class="el-cur" id="el-cur">初始化评测环境…</div>
+          <div class="el-counts" id="el-counts"></div>
+        </div>
+        <div class="el-steps" id="el-steps"></div>
+      </div>
+      <div class="el-foot" id="el-foot">评测引擎就绪，等待第一项检测开始…</div>
+    </section>
+  </div>`;
+}
+function bindEvalLoop() {
+  paintEvalLoop();
+  every(tickEvalLoop, 1000);
+}
+function tickEvalLoop() {
+  evalSim.tick += 1;
+  if (evalSim.tick % 2 === 0) evalSim.idx += 1;
+  if (evalSim.idx > EVAL_STEPS.length + 4) { evalSim.idx = 0; evalSim.tick = 0; }
+  paintEvalLoop();
+}
+function paintEvalLoop() {
+  const fill = $('#el-fill');
+  if (!fill) return;
+  const len = EVAL_STEPS.length;
+  const cur = Math.min(evalSim.idx, len);
+  const pct = Math.round((cur / len) * 100);
+  fill.style.width = pct + '%';
+  $('#el-pct').textContent = pct + '%';
+  $('#el-time').textContent = fmtElapsed(evalSim.tick * 1000);
+  const done = EVAL_STEPS.slice(0, cur);
+  const f = done.filter((s) => s.verdict === 'fail').length;
+  const p = done.filter((s) => s.verdict === 'partial').length;
+  $('#el-counts').innerHTML = `
+    <span>已检测 <b>${cur}/${len}</b></span>
+    <span>通过 <b style="color:var(--chart-3)">${cur - f - p}</b></span>
+    <span>部分 <b style="color:var(--chart-4)">${p}</b></span>
+    <span>未通过 <b style="color:var(--destructive)">${f}</b></span>`;
+  const curStep = cur < len ? EVAL_STEPS[cur] : null;
+  const curGroup = curStep ? EVAL_GROUPS[curStep.g - 1].name : '';
+  $('#el-cur').innerHTML = curStep
+    ? `当前检测：<b>${curStep.name}</b> · ${curGroup}`
+    : '全部检测完成 · 生成评测报告与错题集…';
+  $('#el-steps').innerHTML = EVAL_GROUPS.map((g) => {
+    const rows = EVAL_STEPS.map((s, i) => ({ s, i })).filter(({ s }) => s.g === g.id).map(({ s, i }) => {
+      const st = i < cur ? s.verdict : i === cur ? 'cur' : 'todo';
+      const mark = st === 'pass' ? '✓' : st === 'fail' ? '✗' : st === 'partial' ? '◐' : st === 'cur' ? '▸' : '·';
+      const cls = st === 'pass' ? 'v-pass' : st === 'fail' ? 'v-fail' : st === 'partial' ? 'v-part' : '';
+      return `<div class="el-step${st === 'cur' ? ' cur' : ''}"><span class="el-mark ${cls}">${mark}</span>${s.name}</div>`;
+    }).join('');
+    return `<div><div class="el-group-label">${g.id} · ${g.name}</div>${rows}</div>`;
+  }).join('');
+  $('#el-foot').textContent = curStep
+    ? `[${fmtClock(new Date())}] 执行检测 ${curStep.tag} · ${curStep.action}`
+    : `[${fmtClock(new Date())}] 评测闭环 · 报告编号 RPT-DEMO-${String(evalSim.tick).padStart(2, '0')} · 演示循环重播`;
+}
+function statCardsHtml(stats, compact) {
+  return `<div class="stats-row${compact ? ' compact' : ''}">${stats.map(([label, num]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div></div>`).join('')}</div>`;
+}
+
+function renderRangeLanding() {
   rangeState.scene = 'grid';
   $('#view').innerHTML = `
   <div class="page">
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">任务中心</h2>
-        <p class="page-desc">靶场首屏 · 数据仪表盘与常驻攻防靶场 demo 实时画面，点击 demo 窗口进入靶场控制台</p>
+        <h2 class="page-title">靶场任务</h2>
+        <p class="page-desc">高仿真攻防靶场 · 红蓝对抗与渗透演练任务入口</p>
       </div>
-      <button class="btn btn-outline" id="btn-new-task">新建任务</button>
+      <div style="display:flex;gap:10px">
+        <a class="btn btn-ghost" href="#/tasks">任务中心</a>
+        <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
+      </div>
     </div>
     <div class="history-head">数据仪表盘</div>
-    <div class="stats-row">
-      ${TASK_STATS.map(([label, num]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div></div>`).join('')}
+    ${statCardsHtml(TASK_STATS, true)}
+    ${demoLoopHtml()}
+    ${introWaterfallHtml('关于靶场', RANGE_INTRO)}
+  </div>`;
+  bindDemoLoop();
+  $('#btn-new-task').addEventListener('click', () => openMarketplace(null));
+}
+
+function renderEvalLanding() {
+  $('#view').innerHTML = `
+  <div class="page">
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">评测任务</h2>
+        <p class="page-desc">面向大模型与智能体的风险点全量评测 · 报告与错题集自动归集</p>
+      </div>
+      <div style="display:flex;gap:10px">
+        <a class="btn btn-ghost" href="#/tasks">任务中心</a>
+        <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
+      </div>
     </div>
-    ${rangeSectionHtml('grid', 'hero')}
-    <div class="history-head" style="margin-top:32px">评测与攻防任务 · 运行中<span class="head-badge">${userRunning ? 1 : 0} 个</span></div>
+    <div class="history-head">数据仪表盘</div>
+    ${statCardsHtml(EVAL_STATS, true)}
+    ${evalLoopHtml()}
+    ${introWaterfallHtml('关于评测体系', EVAL_INTRO)}
+  </div>`;
+  bindEvalLoop();
+  $('#btn-new-task').addEventListener('click', () => openMarketplaceCat('eval'));
+}
+
+function renderTrainingLanding() {
+  $('#view').innerHTML = `
+  <div class="page">
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">训练场</h2>
+        <p class="page-desc">训练数据产出总览 · 目标导向的攻防能力训练</p>
+      </div>
+      <div style="display:flex;gap:10px">
+        <a class="btn btn-ghost" href="#/tasks">任务中心</a>
+        <button class="btn btn-primary" id="btn-new-train">＋ 新建训练任务</button>
+      </div>
+    </div>
+    <div class="history-head">数据产出仪表盘</div>
+    ${statCardsHtml(TRAIN_STATS, true)}
+    ${introWaterfallHtml('关于训练场', TRAIN_INTRO)}
+  </div>`;
+  $('#btn-new-train').addEventListener('click', () => { location.hash = '#/train-new'; });
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * 任务中心（任务流枢纽，导航不设入口）
+ * 任务仪表盘（实时）+ 运行中任务（新任务即见，小窗模拟运行）
+ * + 已完成任务列表（任务标签 / 结果标签 / 数据标签 + 三个操作）
+ * ════════════════════════════════════════════════════════════════ */
+const TASK_TYPE_CN = { eval: '评测任务', redblue: '靶场攻防任务', agentrisk: '行为风险评测', training: '训练任务' };
+const CONSOLE_CN = { eval: '评测控制台', redblue: '靶场控制台', agentrisk: '评测控制台', training: '训练控制台' };
+function consoleHashOf(cfg) {
+  return cfg.category === 'redblue' ? '#/range' : cfg.category === 'training' ? '#/training-console' : '#/workbench';
+}
+
+function renderTasks() {
+  const userRunning = sessionStorage.getItem('aisr-running') === '1';
+  $('#view').innerHTML = `
+  <div class="page">
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">任务中心</h2>
+        <p class="page-desc">评测 / 靶场攻防 / 训练任务的统一运行视图 · 点击运行中窗口进入对应任务控制台</p>
+      </div>
+      <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
+    </div>
+    <div class="history-head">任务仪表盘<span class="head-badge">实时</span></div>
+    ${statCardsHtml(TASK_STATS)}
+    <div class="history-head">运行中任务<span class="head-badge">${userRunning ? 1 : 0} 个</span></div>
     <div id="runwin-wrap" style="margin-bottom:32px"></div>
     <div class="history-head">已完成任务</div>
     <div class="done-list" id="done-list"></div>
   </div>`;
   renderRunning();
   renderDoneList();
-  /* hero 为监控橱窗：无内部交互，整窗点击 / Enter 跳转靶场控制台 */
-  const heroSec = $('#rg-hero-sec');
-  heroSec.addEventListener('click', () => { location.hash = '#/range'; });
-  heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter') location.hash = '#/range'; });
-  paintRange('grid');
-  every(tickUserWin, 1000);
-  every(tickRange, 1000);
+  every(tickRunning, 1000);
   $('#btn-new-task').addEventListener('click', () => openMarketplace(null));
 }
 
-/* ── 运行中任务区：仅展示用户自发起任务；无任务时留空 ──────────── */
+/* ── 运行中任务区：创建后立即可见的小窗，按任务类型模拟运行 ────── */
 function renderRunning() {
   const wrap = $('#runwin-wrap');
-  if (sessionStorage.getItem('aisr-running') !== '1') {
-    wrap.innerHTML = `<div class="runwin-empty">当前没有运行中的评测 / 攻防任务 · 点击右上角「新建任务」发起</div>`;
+  const cfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
+  if (!cfg || sessionStorage.getItem('aisr-running') !== '1') {
+    wrap.innerHTML = `<div class="runwin-empty">当前没有运行中的任务 · 点击右上角「新建任务」发起评测 / 靶场攻防任务，或在训练场发起训练任务</div>`;
     return;
   }
-  const cfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
-  const title = cfg ? resolveRunMeta(cfg).title : '未命名任务';
+  const meta = resolveRunMeta(cfg);
   wrap.innerHTML = `
   <div class="runwin-grid">
-    <div class="runwin" id="user-win">
+    <div class="runwin" id="user-win" role="link" tabindex="0">
       <div class="runwin-head">
         <span class="live-dot"></span>
-        <span class="runwin-title">${esc(title)} · 你发起的任务</span>
-        <span class="badge badge-gold">接管中</span>
+        <span class="runwin-title">${esc(meta.title || '未命名任务')} · 你发起的任务</span>
+        <span class="badge badge-primary">${TASK_TYPE_CN[cfg.category] || '任务'}</span>
       </div>
-      <div class="runwin-viz"><div class="sim-risk"><span>任务正在工作台执行，点击进入继续观察或干预。</span></div></div>
+      <div class="runwin-viz"><div class="sim-risk" id="uw-viz"></div></div>
       <div class="runwin-foot">
-        <div class="prog-track"><div class="prog-fill indet"></div></div>
-        <div class="runwin-meta"><span>进行中…</span><span class="mono" id="user-win-time">00:00</span></div>
+        <div class="prog-track"><div class="prog-fill" id="uw-fill" style="width:2%"></div></div>
+        <div class="runwin-meta">
+          <span id="uw-step">初始化运行环境…</span>
+          <span class="mono"><span id="uw-pct">0%</span> · <span id="uw-time">00:00</span></span>
+        </div>
       </div>
+      <div class="runwin-goto">点击进入${CONSOLE_CN[cfg.category] || '任务控制台'} →</div>
     </div>
   </div>`;
-  $('#user-win').addEventListener('click', () => { location.hash = '#/workbench'; });
+  const go = () => { location.hash = consoleHashOf(cfg); };
+  $('#user-win').addEventListener('click', go);
+  $('#user-win').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
 }
-function tickUserWin() {
-  const uw = $('#user-win-time');
-  if (uw) {
-    const t0 = parseInt(sessionStorage.getItem('aisr-runStart') || String(Date.now()), 10);
-    uw.textContent = fmtElapsed(Date.now() - t0);
+/* 小窗运行模拟：按任务类型推进步骤（纯演示，与真实引擎无关） */
+function tickRunning() {
+  const cfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
+  if (!cfg || !$('#uw-fill')) return;
+  const t0 = parseInt(sessionStorage.getItem('aisr-runStart') || String(Date.now()), 10);
+  const el = Date.now() - t0;
+  $('#uw-time').textContent = fmtElapsed(el);
+  const viz = $('#uw-viz');
+  const paint = (pct, step, vizHtml) => {
+    $('#uw-fill').style.width = pct + '%';
+    $('#uw-pct').textContent = pct + '%';
+    $('#uw-step').textContent = step;
+    if (viz && vizHtml) viz.innerHTML = vizHtml;
+  };
+  if (cfg.category === 'training') {
+    const total = cfg.epochs || 12;
+    const ep = Math.min(total, 1 + Math.floor(el / 4000));
+    const pct = Math.min(97, Math.round((ep / total) * 100));
+    const loss = (1.8 * Math.exp(-ep / (total / 2)) + 0.12 + Math.sin(el / 900) * 0.03).toFixed(3);
+    const reward = (0.18 + (ep / total) * 0.68).toFixed(2);
+    paint(pct, `Epoch ${ep}/${total} · loss ${loss}`, `
+      <span>Epoch <b>${ep}/${total}</b></span>
+      <span>loss <b>${loss}</b></span>
+      <span>reward <b style="color:var(--chart-3)">${reward}</b></span>
+      <span>吞吐 <b>128 samples/s</b></span>`);
+  } else if (cfg.category === 'eval' || cfg.category === 'agentrisk') {
+    const i = Math.min(EVAL_STEPS.length, 1 + Math.floor(el / 3000));
+    const pct = Math.min(97, Math.round((i / EVAL_STEPS.length) * 100));
+    const fails = Math.floor(i * 0.22), part = Math.floor(i * 0.13);
+    paint(pct, `当前检测：${EVAL_STEPS[i - 1].name}`, `
+      <span>已检测 <b>${i}/${EVAL_STEPS.length}</b></span>
+      <span>未通过 <b style="color:var(--destructive)">${fails}</b></span>
+      <span>部分 <b style="color:var(--chart-4)">${part}</b></span>
+      <span>通过 <b style="color:var(--chart-3)">${i - fails - part}</b></span>`);
+  } else {
+    const i = Math.min(RB_STEPS.length, 1 + Math.floor(el / 3000));
+    const pct = Math.min(97, Math.round((i / RB_STEPS.length) * 100));
+    const s = RB_STEPS[i - 1];
+    paint(pct, `当前：M${s.g} ${RB_GROUPS[s.g - 1].name}`, `
+      <span>里程碑 <b>${Math.max(0, s.g - 1)}/${RB_GROUPS.length}</b></span>
+      <span>攻击得分 <b>${i * 14}</b></span>
+      <span>渗透阶段 <b style="color:var(--primary)">${RANGE_KILLCHAIN[Math.min(5, Math.floor((i / RB_STEPS.length) * 6))]}</b></span>`);
   }
 }
 
-/* ── 已完成任务列表（关键信息行，点击进详情）────────────────────── */
+/* ── 已完成任务列表（任务标签 / 结果标签 / 数据标签 + 三个操作）────── */
+const DATA_TAGS = { eval: ['评测报告', '错题集'], redblue: ['攻防轨迹', '可视化报告'], agentrisk: ['行为日志', '评测报告'], training: ['训练数据集', '模型权重'] };
 function renderDoneList() {
   const tasks = [...PRESET_RESULTS, ...HISTORY_TASKS];
-  $('#done-list').innerHTML = tasks.map((t) => {
+  const { reports } = buildDatasets();
+  const canDownload = ucRole() !== 'viewer';
+  $('#done-list').innerHTML = tasks.map((t, idx) => {
     const rec = synthRecord(t);
     const end = new Date(rec.endedAt);
     const stat3 = rec.category === 'eval'
@@ -198,13 +440,14 @@ function renderDoneList() {
       </div>
       <span class="badge badge-primary">${catShort(rec.category)}</span>
       <span class="badge ${rec.verdictClass === 'v-olive' ? 'badge-olive' : rec.verdictClass === 'v-gold' ? 'badge-gold' : 'badge-destructive'}">${rec.verdict}</span>
-      <span class="dr-cell">得分 <b>${rec.score}</b></span>
-      <span class="dr-cell">用时 <b>${fmtElapsed(rec.elapsedMs)}</b></span>
-      <span class="dr-cell">${stat3}</span>
+      <span class="dr-tags">${(DATA_TAGS[rec.category] || ['任务报告']).map((x) => `<span class="badge">${x}</span>`).join('')}</span>
+      <span class="dr-cell"><b>${rec.score}</b> 分</span>
+      <span class="dr-cell">${fmtElapsed(rec.elapsedMs)} · ${stat3}</span>
       <span class="dr-cell">${end.toLocaleDateString('zh-CN')} · ${esc(executorLabel(rec))}</span>
       <span class="dr-actions">
-        <button class="btn btn-ghost btn-sm" data-again="${t.id}">再次启动</button>
-        <button class="btn btn-outline btn-sm" data-report2="${t.id}">查看报告</button>
+        <button class="btn btn-ghost btn-sm" data-again="${t.id}" title="沿用配置进入新建任务流程">再次启动</button>
+        <button class="btn btn-ghost btn-sm" data-report2="${t.id}">查看报告</button>
+        <button class="btn btn-outline btn-sm" data-dl="${idx}" ${canDownload ? '' : 'disabled title="viewer 角色仅可查看"'}>下载数据集</button>
       </span>
     </div>`;
   }).join('');
@@ -219,6 +462,10 @@ function renderDoneList() {
     e.stopPropagation();
     const task = tasks.find((x) => x.id === b.dataset.again);
     openMarketplace({ ...task.cfg });
+  }));
+  $$('[data-dl]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openDlPop(b, 'reports', reports[Number(b.dataset.dl)]);
   }));
 }
 
@@ -847,7 +1094,7 @@ function renderDrill() {
   <div class="page">
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">实战演练场 <span class="badge badge-gold" style="vertical-align:middle">研发中</span></h2>
+        <h2 class="page-title">实战演练场任务 <span class="badge badge-gold" style="vertical-align:middle">研发中</span></h2>
         <p class="page-desc">多人协同实战攻防演练 · 红蓝对抗编排与实时裁决（能力规划中，暂未开放）</p>
       </div>
     </div>
@@ -880,6 +1127,249 @@ function openMarketplace(prefillCfg) {
   }
   if (parseHash().route === 'marketplace') renderMarketplace();
   else location.hash = '#/marketplace';
+}
+/* 从指定任务类型进入新建流程（跳过第 1 步） */
+function openMarketplaceCat(cat) {
+  openMarketplace(null);
+  mpState.cat = cat; mpState.step = 2;
+  renderMarketplace();
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * 新建训练任务 · 分步引导（目标对象 → 训练目标 → 训练参数）
+ * 模拟主流训练平台的建训参数，创建后跳转任务中心
+ * ════════════════════════════════════════════════════════════════ */
+const tnState = { step: 1, objectKind: 'agent', objectId: '', goal: null, epochs: 12, batch: '32', lr: '5e-6', scale: '5K 条', conc: 64 };
+
+function renderTrainNew() {
+  const stepItem = (n, label) => {
+    const cls = tnState.step > n ? 'done' : tnState.step === n ? 'current' : 'todo';
+    return `<div class="step-item ${cls}"><span class="step-no">${tnState.step > n ? '✓' : n}</span>${label}</div>`;
+  };
+  $('#view').innerHTML = `
+  <div class="page">
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">新建训练任务</h2>
+        <p class="page-desc">选择目标对象与训练目标，配置训练参数后立即开训</p>
+      </div>
+      <a class="btn btn-outline" href="#/training">返回训练场</a>
+    </div>
+    <div class="steps-bar">
+      ${stepItem(1, '目标对象')}<span class="step-sep">→</span>
+      ${stepItem(2, '训练目标')}<span class="step-sep">→</span>
+      ${stepItem(3, '训练参数')}
+    </div>
+    <div id="tn-body"></div>
+  </div>`;
+  if (tnState.step === 1) renderTnStep1();
+  else if (tnState.step === 2) renderTnStep2();
+  else renderTnStep3();
+}
+function tnObject() { return findObject(tnState.objectKind, tnState.objectId); }
+
+/* 第 1 步 · 目标对象（智能体 / 大模型） */
+function renderTnStep1() {
+  const pool = tnState.objectKind === 'llm' ? LLMS : AGENTS;
+  if (!pool.some((o) => o.id === tnState.objectId)) tnState.objectId = pool[0].id;
+  $('#tn-body').innerHTML = `
+  <div class="card mp-panel">
+    <div class="wz-field">
+      <span class="field-label">对象类型</span>
+      ${mpChips('tn-kind', [{ v: 'agent', t: '智能体' }, { v: 'llm', t: '大模型' }], tnState.objectKind)}
+    </div>
+    <div class="wz-field">
+      <span class="field-label">目标对象</span>
+      <select class="select" id="tn-obj">${pool.map((o) => `<option value="${o.id}" ${tnState.objectId === o.id ? 'selected' : ''}>${o.name} · ${o.tag}</option>`).join('')}</select>
+    </div>
+    <p class="mini-note">训练将基于目标对象当前版本生成检查点，训练产出沉淀至资产中心。</p>
+    <div class="mp-actions">
+      <span></span>
+      <button class="btn btn-primary" id="tn-next">下一步：选择训练目标</button>
+    </div>
+  </div>`;
+  mpBindChips('tn-kind', (v) => { tnState.objectKind = v; tnState.objectId = ''; renderTnStep1(); });
+  $('#tn-obj').addEventListener('change', (e) => { tnState.objectId = e.target.value; });
+  $('#tn-next').addEventListener('click', () => { tnState.step = 2; renderTrainNew(); });
+}
+
+/* 第 2 步 · 训练目标 */
+function renderTnStep2() {
+  $('#tn-body').innerHTML = `
+  <div class="mode-cards mp-type-cards">
+    ${TRAIN_GOALS.map((g) => `
+    <div class="mode-card" data-goal="${g.id}">
+      <h4>${g.name}</h4>
+      <p>${g.desc}</p>
+      <div class="intro-tags" style="margin-top:10px">${g.tags.map((t) => `<span class="badge">${t}</span>`).join('')}</div>
+    </div>`).join('')}
+  </div>
+  <div class="mp-actions" style="margin-top:16px">
+    <button class="btn btn-ghost" id="tn-back">← 上一步</button>
+  </div>`;
+  $$('#tn-body [data-goal]').forEach((c) => c.addEventListener('click', () => {
+    tnState.goal = c.dataset.goal; tnState.step = 3; renderTrainNew();
+  }));
+  $('#tn-back').addEventListener('click', () => { tnState.step = 1; renderTrainNew(); });
+}
+
+/* 第 3 步 · 训练参数 + 摘要确认 */
+function renderTnStep3() {
+  const goal = TRAIN_GOALS.find((g) => g.id === tnState.goal) || TRAIN_GOALS[0];
+  $('#tn-body').innerHTML = `
+  <div class="card mp-panel">
+    <div class="wz-field">
+      <span class="field-label">训练轮次（Epochs）</span>
+      <div class="hud-row" style="display:flex;align-items:center;gap:12px">
+        <input type="range" id="tn-epochs" min="2" max="24" step="1" value="${tnState.epochs}" style="flex:1">
+        <span class="hud-v mono" id="tn-epochs-v">${tnState.epochs}</span>
+      </div>
+    </div>
+    <div class="wz-field">
+      <span class="field-label">批大小（Batch Size）</span>
+      ${mpChips('tn-batch', ['16', '32', '64', '128'].map((v) => ({ v, t: v })), tnState.batch)}
+    </div>
+    <div class="wz-field">
+      <span class="field-label">学习率（Learning Rate）</span>
+      ${mpChips('tn-lr', ['1e-4', '5e-5', '1e-5', '5e-6'].map((v) => ({ v, t: v })), tnState.lr)}
+    </div>
+    <div class="wz-field">
+      <span class="field-label">训练数据规模</span>
+      ${mpChips('tn-scale', ['1K 条', '5K 条', '2W 条', '全量资产'].map((v) => ({ v, t: v })), tnState.scale)}
+    </div>
+    <div class="wz-field">
+      <span class="field-label">并发容器</span>
+      <div class="hud-row" style="display:flex;align-items:center;gap:12px">
+        <input type="range" id="tn-conc" min="8" max="256" step="8" value="${tnState.conc}" style="flex:1">
+        <span class="hud-v mono" id="tn-conc-v">${tnState.conc}</span>
+      </div>
+    </div>
+    <div class="tpl-params" style="margin-bottom:14px">
+      <span class="small muted">训练摘要</span>
+      <span>目标对象：<b>${esc(tnObject().name)}</b>（${tnState.objectKind === 'llm' ? '大模型' : '智能体'}）</span>
+      <span>训练目标：<b>${goal.name}</b></span>
+      <span>参数：<b class="mono">${tnState.epochs} epochs · batch ${tnState.batch} · lr ${tnState.lr} · ${tnState.scale} · ${tnState.conc} 并发</b></span>
+    </div>
+    <div class="mp-actions">
+      <button class="btn btn-ghost" id="tn-back">← 上一步</button>
+      <button class="btn btn-primary" id="tn-launch">创建并启动训练</button>
+    </div>
+  </div>`;
+  const syncSummary = () => renderTnStep3();
+  $('#tn-epochs').addEventListener('input', (e) => { tnState.epochs = Number(e.target.value); $('#tn-epochs-v').textContent = tnState.epochs; });
+  $('#tn-conc').addEventListener('input', (e) => { tnState.conc = Number(e.target.value); $('#tn-conc-v').textContent = tnState.conc; });
+  mpBindChips('tn-batch', (v) => { tnState.batch = v; syncSummary(); });
+  mpBindChips('tn-lr', (v) => { tnState.lr = v; syncSummary(); });
+  mpBindChips('tn-scale', (v) => { tnState.scale = v; syncSummary(); });
+  $('#tn-back').addEventListener('click', () => { tnState.step = 2; renderTrainNew(); });
+  $('#tn-launch').addEventListener('click', () => startRun({
+    category: 'training',
+    objectKind: tnState.objectKind, objectId: tnState.objectId,
+    goal: tnState.goal || TRAIN_GOALS[0].id,
+    epochs: tnState.epochs, batch: tnState.batch, lr: tnState.lr, scale: tnState.scale, concurrency: tnState.conc,
+  }));
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * 训练任务控制台 · 训练曲线 / 实时指标 / 训练日志（模拟）
+ * ════════════════════════════════════════════════════════════════ */
+const trc = { tick: 0, loss: [], reward: [], lines: [], paused: false };
+function renderTrainingConsole() {
+  const cfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
+  if (!cfg || cfg.category !== 'training' || sessionStorage.getItem('aisr-running') !== '1') {
+    $('#view').innerHTML = `
+    <div class="page"><div class="empty-state">
+      <span class="serif">暂无运行中的训练任务</span>
+      <p>到训练场发起训练任务，创建后可在任务中心跟踪运行状态。</p>
+      <a class="btn btn-outline" href="#/training">去训练场</a>
+    </div></div>`;
+    return;
+  }
+  const meta = resolveRunMeta(cfg);
+  const goal = TRAIN_GOALS.find((g) => g.id === cfg.goal) || TRAIN_GOALS[0];
+  trc.tick = 0; trc.loss = []; trc.reward = []; trc.lines = []; trc.paused = false;
+  $('#view').innerHTML = `
+  <div class="page">
+    <div style="margin-bottom:16px"><a href="#/tasks" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">训练控制台</h2>
+        <p class="page-desc">${esc(meta.title)} · ${goal.name} · <span class="mono">${cfg.epochs} epochs · batch ${cfg.batch} · lr ${cfg.lr} · ${cfg.scale}</span></p>
+      </div>
+      <div style="display:flex;gap:10px">
+        <span class="env-status"><span class="dot dot-ok"></span>训练进行中</span>
+        <button class="btn btn-outline btn-sm" id="trc-pause">暂停训练</button>
+        <button class="btn btn-ghost btn-sm" id="trc-stop">结束任务</button>
+      </div>
+    </div>
+    <div class="tc-grid">
+      <div class="card tc-card">
+        <h4>训练曲线</h4>
+        <svg class="tc-chart" id="trc-chart" viewBox="0 0 100 50" preserveAspectRatio="none">
+          <line x1="0" y1="12.5" x2="100" y2="12.5" stroke="var(--border)" stroke-width="0.2"/>
+          <line x1="0" y1="25" x2="100" y2="25" stroke="var(--border)" stroke-width="0.2"/>
+          <line x1="0" y1="37.5" x2="100" y2="37.5" stroke="var(--border)" stroke-width="0.2"/>
+          <polyline id="trc-loss" fill="none" stroke="var(--destructive)" stroke-width="0.7" points=""/>
+          <polyline id="trc-reward" fill="none" stroke="var(--chart-3)" stroke-width="0.7" points=""/>
+        </svg>
+        <div class="tc-legend">
+          <span><i style="background:var(--destructive)"></i>loss</span>
+          <span><i style="background:var(--chart-3)"></i>reward</span>
+        </div>
+      </div>
+      <div class="card tc-card">
+        <h4>实时指标</h4>
+        <div class="tc-metrics">
+          <div class="tc-metric"><span class="k">Epoch</span><span class="v" id="trc-epoch">0/${cfg.epochs}</span></div>
+          <div class="tc-metric"><span class="k">loss</span><span class="v" id="trc-loss-v">—</span></div>
+          <div class="tc-metric"><span class="k">reward</span><span class="v" id="trc-reward-v">—</span></div>
+          <div class="tc-metric"><span class="k">吞吐</span><span class="v" id="trc-qps">—</span></div>
+          <div class="tc-metric"><span class="k">GPU 利用率</span><span class="v" id="trc-gpu">—</span></div>
+          <div class="tc-metric"><span class="k">已用时</span><span class="v" id="trc-elapsed">00:00</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card tc-card">
+      <h4>训练日志</h4>
+      <div class="tc-log" id="trc-log"></div>
+    </div>
+  </div>`;
+  const t0 = parseInt(sessionStorage.getItem('aisr-runStart') || String(Date.now()), 10);
+  every(() => tickTrainingConsole(cfg, t0), 1000);
+  $('#trc-pause').addEventListener('click', () => {
+    trc.paused = !trc.paused;
+    $('#trc-pause').textContent = trc.paused ? '继续训练' : '暂停训练';
+  });
+  $('#trc-stop').addEventListener('click', () => {
+    sessionStorage.removeItem('aisr-running');
+    sessionStorage.removeItem('aisr-runCfg');
+    sessionStorage.removeItem('aisr-runStart');
+    showToast('训练任务已结束 · 产出检查点已归档至资产中心（演示）');
+    location.hash = '#/tasks';
+  });
+}
+function tickTrainingConsole(cfg, t0) {
+  if (trc.paused || !$('#trc-chart')) return;
+  trc.tick += 1;
+  const total = cfg.epochs || 12;
+  const ep = Math.min(total, Math.floor(trc.tick / 4));
+  const loss = 1.8 * Math.exp(-trc.tick / (total * 2)) + 0.12 + Math.sin(trc.tick * 0.9) * 0.03;
+  const reward = Math.min(0.92, 0.18 + (trc.tick / (total * 4)) * 0.68 + Math.sin(trc.tick * 0.5) * 0.02);
+  trc.loss.push(loss); trc.reward.push(reward);
+  if (trc.loss.length > 60) { trc.loss.shift(); trc.reward.shift(); }
+  const pts = (arr, min, max) => arr.map((v, i) =>
+    `${(i / Math.max(1, arr.length - 1) * 100).toFixed(1)},${(46 - ((v - min) / (max - min)) * 40).toFixed(1)}`).join(' ');
+  $('#trc-loss').setAttribute('points', pts(trc.loss, 0.1, 2.0));
+  $('#trc-reward').setAttribute('points', pts(trc.reward, 0.1, 1.0));
+  $('#trc-epoch').textContent = `${ep}/${total}`;
+  $('#trc-loss-v').textContent = loss.toFixed(3);
+  $('#trc-reward-v').textContent = reward.toFixed(2);
+  $('#trc-qps').textContent = `${118 + Math.round(Math.sin(trc.tick * 0.7) * 12)} samples/s`;
+  $('#trc-gpu').textContent = `${82 + Math.round(Math.sin(trc.tick * 0.4) * 6)}%`;
+  $('#trc-elapsed').textContent = fmtElapsed(Date.now() - t0);
+  trc.lines.push(`[${fmtClock(new Date())}] epoch ${ep}/${total} · loss ${loss.toFixed(3)} · reward ${reward.toFixed(2)} · grad_norm ${(0.8 + Math.sin(trc.tick) * 0.2).toFixed(2)} · ckpt 自动保存`);
+  if (trc.lines.length > 40) trc.lines = trc.lines.slice(-40);
+  $('#trc-log').innerHTML = trc.lines.slice(-8).map((l) => `<div><span class="lg-t">${l.slice(0, 11)}</span>${esc(l.slice(11))}</div>`).join('');
 }
 
 const mpChips = (id, options, cur) => `<div class="radio-row" id="${id}">${options.map((o) =>
@@ -1274,6 +1764,11 @@ function resolveRunMeta(cfg) {
     meta.envLabel = `${env.id} · ${env.title}`;
     meta.agentName = cfg.mode === 'battle' ? (findAgent(cfg.agentId) || AGENTS[0]).name : '';
     meta.title = `${env.id} 红蓝攻防`;
+  } else if (cfg.category === 'training') {
+    const obj = findObject(cfg.objectKind || 'agent', cfg.objectId);
+    const goal = (TRAIN_GOALS.find((g) => g.id === cfg.goal) || TRAIN_GOALS[0]).name;
+    meta.objectLabel = `${obj.name}（${cfg.objectKind === 'llm' ? '大模型' : '智能体'}）`;
+    meta.title = `${obj.name} · ${goal}`;
   } else {
     const env = findArEnv(cfg.envId) || AGENTRISK_ENVS[0];
     meta.skin = TOPO_SKINS[cfg.simEnv] || TOPO_SKINS[env.skin];
@@ -1288,7 +1783,8 @@ function startRun(cfg) {
   sessionStorage.setItem('aisr-runCfg', JSON.stringify(cfg));
   sessionStorage.setItem('aisr-running', '1');
   sessionStorage.setItem('aisr-runStart', String(Date.now()));
-  location.hash = '#/workbench';
+  /* 创建完任务统一跳转任务中心，运行中小窗立即可见 */
+  location.hash = '#/tasks';
 }
 
 /* 文本占位符填充（按皮肤 targets + CVE）*/
@@ -2303,8 +2799,11 @@ const DS_COLS = {
   reports: [{ key: 'no', label: '报告编号' }, { key: 'title', label: '任务' }, { key: 'cat', label: '类别' }, { key: 'verdict', label: '结论' }, { key: 'score', label: '得分' }, { key: 'elapsed', label: '用时' }, { key: 'ended', label: '完成时间' }],
   wrong: [{ key: 'object', label: '评测对象' }, { key: 'name', label: '风险点' }, { key: 'level', label: '等级' }, { key: 'verdict', label: '判定' }, { key: 'evidence', label: '证据' }, { key: 'time', label: '时间' }],
   log: [{ key: 'ts', label: '时间戳' }, { key: 'object', label: '评测对象' }, { key: 'item', label: '检测项' }, { key: 'verdict', label: '判定' }],
+  bank: [{ key: 'name', label: '题库' }, { key: 'items', label: '题量' }, { key: 'updated', label: '更新时间' }, { key: 'desc', label: '简介' }],
+  trace: [{ key: 'no', label: '批次号' }, { key: 'title', label: '来源任务' }, { key: 'cat', label: '类型' }, { key: 'score', label: '条数' }, { key: 'ended', label: '入库时间' }],
+  sec: [{ key: 'no', label: '批次号' }, { key: 'title', label: '来源任务' }, { key: 'cat', label: '类型' }, { key: 'score', label: '条数' }, { key: 'ended', label: '入库时间' }],
 };
-const DS_NAMES = { reports: '任务报告', wrong: '错题集', log: '风险点日志轨迹' };
+const DS_NAMES = { reports: '任务报告', wrong: '错题集', log: '风险点日志轨迹', bank: '评测题库', trace: '智能体轨迹数据集', sec: '安全攻防数据集' };
 
 function toCsv(rows, cols) {
   const q = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
@@ -2494,7 +2993,7 @@ function bindBankAdmin() {
     $('#bank-save').addEventListener('click', () => {
       bank.name = $('#bank-name').value.trim() || bank.name;
       bank.desc = $('#bank-desc').value.trim();
-      closeModal(); renderData();
+      closeModal(); renderAssets();
       showToast('题库信息已保存（仅前端状态，刷新还原）');
     });
   }));
@@ -2514,302 +3013,175 @@ const ICO = {
 };
 
 /* ════════════════════════════════════════════════════════════════
- * 页面五 · 数据中心（角色化：admin 题库管理 / 行内单条下载按角色禁用）
+ * 资源中心 · 资产中心（平台资产展示页）
+ * 顶部整体资产数（题库 / 靶场环境 / 轨迹数据集 / 攻防数据集 / 评测目标）
+ * 下方分区块展示具体数据集，卡片含下载（viewer 禁用）
  * ════════════════════════════════════════════════════════════════ */
-function renderData() {
+function renderAssets() {
   const role = ucRole();
   const canDownload = role !== 'viewer';
-  const { reports, wrongRows, logRows } = buildDatasets();
-  const dsHead = (label, n) => `
-    <div class="history-head head-row" style="margin-top:32px">
-      <span>数据集 · ${label}<span class="head-badge">${n} 行</span></span>
-      <span class="mini-note" style="margin:0">点击每条记录末尾图标下载该条数据集</span>
-    </div>`;
-  const dlTd = (kind, idx) => `
-        <td class="dl-cell"><button class="btn btn-ghost btn-sm dl-btn" data-row-dl="${kind}:${idx}" ${canDownload ? '' : 'disabled title="viewer 角色仅可查看"'}>${ICO.download}</button></td>`;
+  const tile = (txt, cls) => `<span class="asset-tile${cls ? ' ' + cls : ''}">${txt}</span>`;
+  const dlBtn = (kind, idx) => `<button class="btn btn-outline btn-sm" data-asset-dl="${kind}:${idx}" ${canDownload ? '' : 'disabled title="viewer 角色仅可查看"'}>下载</button>`;
+  const traceRow = (b) => ({ no: b.batch, title: b.source, cat: '轨迹数据集', score: b.count, ended: b.time });
   $('#view').innerHTML = `
   <div class="page">
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">任务结果管理</h2>
-        <p class="page-desc">任务回流的轨迹 / 报告 / 题库资产总览</p>
+        <h2 class="page-title">资产中心</h2>
+        <p class="page-desc">平台资产总览 · 题库 / 靶场环境 / 轨迹与攻防数据集 / 评测目标，分区块展示与下载</p>
       </div>
       <span class="badge ${UC_ROLES[role].badgeCls}">当前角色 ${role}</span>
     </div>
-    <div class="stats-row">
-      ${DATA_STATS.map(([label, num]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div></div>`).join('')}
+    <div class="stats-row five">
+      ${ASSET_STATS.map(([label, num, sub]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div><div class="card-sub" style="margin-top:6px">${sub}</div></div>`).join('')}
     </div>
+
+    <div class="asset-block-head">评测题库<span class="head-badge">${QUESTION_BANK_LIST.length} 套 · 对齐公开基准与自研红线</span></div>
+    <div class="asset-grid">
+      ${QUESTION_BANK_LIST.map((q, i) => `
+      <div class="asset-card">
+        ${tile(q.name.slice(0, 1))}
+        <div class="asset-body">
+          <div class="asset-name">${esc(q.name)}</div>
+          <div class="asset-desc">${esc(q.desc)}</div>
+          <div class="asset-meta"><span><b>${q.items}</b> 题</span><span>更新 ${q.updated}</span><span class="asset-actions">${dlBtn('bank', i)}</span></div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div class="asset-block-head">靶场环境<span class="head-badge">${ENVIRONMENTS.length} 个高仿真漏洞环境 · 点击卡片进入靶场控制台</span></div>
+    <div class="asset-grid">
+      ${ENVIRONMENTS.map((e) => `
+      <div class="asset-card" data-env-go style="cursor:pointer">
+        ${tile(e.difficulty.slice(0, 1), 't2')}
+        <div class="asset-body">
+          <div class="asset-name">${esc(e.id)} <span class="badge ${e.status === 'available' ? 'badge-olive' : 'badge-gold'}">${e.status === 'available' ? '可用' : '维护中'}</span></div>
+          <div class="asset-desc">${esc(e.title)} · ${esc(e.type)}</div>
+          <div class="asset-meta"><span>CVSS <b>${e.cvss}</b></span><span>${diffBadge(e.difficulty)}</span><span>时长 ${e.duration}</span></div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div class="asset-block-head">智能体轨迹数据集<span class="head-badge">${DATA_BATCHES.length} 批 · 攻防轨迹可回放</span></div>
+    <div class="asset-grid">
+      ${DATA_BATCHES.slice(0, 3).map((b, i) => `
+      <div class="asset-card">
+        ${tile('轨', 't3')}
+        <div class="asset-body">
+          <div class="asset-name mono">${b.batch}</div>
+          <div class="asset-desc">${esc(b.source)}</div>
+          <div class="asset-meta"><span><b>${b.count}</b> 条</span><span>${b.time}</span><span class="asset-actions">${dlBtn('trace', i)}</span></div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div class="asset-block-head">安全攻防数据集<span class="head-badge">标注检测 · 红队语料 · 评测基准</span></div>
+    <div class="asset-grid">
+      ${DATA_BATCHES.slice(3).map((b, i) => `
+      <div class="asset-card">
+        ${tile('防', 't5')}
+        <div class="asset-body">
+          <div class="asset-name mono">${b.batch}</div>
+          <div class="asset-desc">${esc(b.source)}</div>
+          <div class="asset-meta"><span><b>${b.count}</b> 条</span><span>${b.time}</span><span class="asset-actions">${dlBtn('sec', i)}</span></div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div class="asset-block-head">评测目标<span class="head-badge">${RES_MODELS.length + RES_AGENTS.length} 个已接入 · 大模型与智能体</span></div>
+    <div class="asset-chips">
+      ${RES_MODELS.map((m) => `<span class="asset-chip">${esc(m.name)}<span class="badge badge-primary">大模型</span></span>`).join('')}
+      ${RES_AGENTS.map((a) => `<span class="asset-chip">${esc(a.name)}<span class="badge badge-olive">智能体</span></span>`).join('')}
+    </div>
+
     ${role === 'admin' ? bankAdminHtml() : ''}
-
-    ${dsHead('任务报告', reports.length)}
-    <table class="report-table res-table-wrap">
-      <thead><tr>${DS_COLS.reports.map((c) => `<th>${c.label}</th>`).join('')}<th class="dl-cell"></th></tr></thead>
-      <tbody>${reports.map((r, i) => `
-        <tr><td class="mono small">${r.no}</td><td>${esc(r.title)}</td><td><span class="badge badge-primary">${r.cat}</span></td>
-        <td>${esc(r.verdict)}</td><td class="num">${r.score}</td><td class="mono small">${r.elapsed}</td><td class="small muted mono">${r.ended}</td>${dlTd('reports', i)}</tr>`).join('')}
-      </tbody>
-    </table>
-
-    ${dsHead('错题集（评测未通过 / 部分）', wrongRows.length)}
-    <table class="report-table res-table-wrap">
-      <thead><tr>${DS_COLS.wrong.map((c) => `<th>${c.label}</th>`).join('')}<th class="dl-cell"></th></tr></thead>
-      <tbody>${wrongRows.map((r, i) => `
-        <tr><td class="small">${esc(r.object)}</td><td style="font-weight:500">${esc(r.name)}</td><td>${levelBadge(r.level)}</td>
-        <td>${verdictBadge(r.verdict)}</td><td class="small">${esc(r.evidence)}</td><td class="small muted mono">${r.time}</td>${dlTd('wrong', i)}</tr>`).join('')}
-      </tbody>
-    </table>
-
-    ${dsHead('评测风险点日志轨迹', logRows.length)}
-    <table class="report-table res-table-wrap">
-      <thead><tr>${DS_COLS.log.map((c) => `<th>${c.label}</th>`).join('')}<th class="dl-cell"></th></tr></thead>
-      <tbody>${logRows.map((r, i) => `
-        <tr><td class="mono small muted">${r.ts}</td><td class="small">${esc(r.object)}</td>
-        <td>${esc(r.item)}</td><td>${verdictBadge(r.verdict)}</td>${dlTd('log', i)}</tr>`).join('')}
-      </tbody>
-    </table>
-
-    <div class="history-head" style="margin-top:32px">最近入库 · 轨迹批次</div>
-    <table class="report-table res-table-wrap">
-      <thead><tr><th>批次号</th><th>来源任务</th><th class="num">条数</th><th>入库时间</th></tr></thead>
-      <tbody>${DATA_BATCHES.map((b) => `
-        <tr><td class="mono small">${b.batch}</td><td>${esc(b.source)}</td>
-        <td class="num">${b.count}</td><td class="small muted mono">${b.time}</td></tr>`).join('')}
-      </tbody>
-    </table>
-    <p class="mini-note res-note">数据回流与结构化建模 930 建设${canDownload ? '' : ' · viewer 角色下载已禁用'}</p>
+    <p class="mini-note res-note">资产由任务回流与训练合成持续沉淀${canDownload ? '' : ' · viewer 角色下载已禁用'}</p>
   </div>`;
-  $$('[data-row-dl]').forEach((b) => b.addEventListener('click', () => {
-    const [kind, idx] = b.dataset.rowDl.split(':');
-    openDlPop(b, kind, { reports, wrong: wrongRows, log: logRows }[kind][Number(idx)]);
+  $$('[data-asset-dl]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const [kind, idx] = b.dataset.assetDl.split(':');
+    const row = kind === 'bank'
+      ? QUESTION_BANK_LIST[Number(idx)]
+      : traceRow(DATA_BATCHES.slice(kind === 'trace' ? 0 : 3)[Number(idx)]);
+    openDlPop(b, kind, row);
   }));
+  $$('[data-env-go]').forEach((c) => c.addEventListener('click', () => { location.hash = '#/range'; }));
   if (role === 'admin') bindBankAdmin();
 }
 
 /* ════════════════════════════════════════════════════════════════
- * 页面六 · 资源中心（子 tab：AI 资产 / 用户权限 / 环境管理 / 系统状态）
- * admin 全部操作可用（toast 示意）；operator 可看全部但操作需管理员；viewer 只读
+ * 资源中心 · 系统配置（平台参数 / 服务状态 / 计算资源 / 用户权限）
+ * 配置项仅 admin 可编辑；保存 / 检查 / 修改权限均为演示示意
  * ════════════════════════════════════════════════════════════════ */
-const resState = { tab: 'assets', assetTab: 'models' };
-
 function statusTag(text) {
   const cls = ['正常', '运行中', '就绪', '已发布'].includes(text) ? 'dot-ok'
     : text === '已禁用' ? 'dot-bad' : 'dot-warn';
   return `<span class="env-status"><span class="dot ${cls}"></span>${text}</span>`;
 }
-function assetHash(name) {
-  let h = 0;
-  for (const ch of name) h = (h * 131 + ch.codePointAt(0)) >>> 0;
-  return h;
-}
-function assetIdHex(name) { return (assetHash(name) % 0xFFFFFF).toString(16).toUpperCase().padStart(6, '0'); }
-function assetMetrics(name) {
-  const h = assetHash(name);
-  return [
-    ['评测次数', String(12 + (h % 88))],
-    ['通过率', `${60 + ((h >> 8) % 39)}%`],
-    ['风险拦截率', `${92 + ((h >> 16) % 8)}%`],
-  ];
-}
-function openAssetDrawer(kind, item) {
-  const role = ucRole();
-  const isModel = kind === 'models';
-  const h = assetHash(item.name);
-  const created = `2026-${String(1 + (h % 7)).padStart(2, '0')}-${String(1 + ((h >> 4) % 28)).padStart(2, '0')}`;
-  const kv = [
-    ['资产来源', item.source === '平台' ? '平台预置' : '用户上传'],
-    [isModel ? '基础模型' : '绑定模型', isModel ? item.base : item.bound],
-    ['当前版本', item.version],
-    ['创建时间', created],
-  ];
-  const vers = RES_VERSIONS.filter((v) => v.asset === item.name);
-  $('#modal-root').innerHTML = `
-  <div class="drawer-scrim"></div>
-  <aside class="drawer" role="dialog" aria-label="资产详情">
-    <div class="drawer-head">
-      <div>
-        <div class="drawer-eyebrow">ASSET DETAILS · ${isModel ? 'MODEL' : 'AGENT'}</div>
-        <div class="drawer-title">${esc(item.name)}</div>
-      </div>
-      <button class="btn btn-ghost btn-sm" id="drawer-x" aria-label="关闭">${ICO.x}</button>
-    </div>
-    <div>${statusTag(item.status)}<span class="mono small muted" style="margin-left:10px">ASSET-${assetIdHex(item.name)}</span></div>
-    <dl class="drawer-kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-    <div>
-      <div class="card-sub" style="margin-bottom:8px">能力标签</div>
-      <div>${item.caps.map((c) => `<span class="chip" style="margin:0 6px 6px 0">${esc(c)}</span>`).join('')}</div>
-    </div>
-    <div>
-      <div class="card-sub" style="margin-bottom:8px">测试记录（示意）</div>
-      <div class="drawer-metrics">${assetMetrics(item.name).map(([k, v]) =>
-        `<div class="report-metric" style="padding:12px"><span class="small muted">${k}</span><span class="mono" style="font-size:18px">${v}</span></div>`).join('')}</div>
-    </div>
-    <div>
-      <div class="card-sub" style="margin-bottom:8px">版本记录</div>
-      ${vers.length ? `<table class="report-table"><thead><tr><th>版本</th><th>类型</th><th>日期</th><th>状态</th></tr></thead>
-        <tbody>${vers.map((v) => `<tr><td class="mono small">${v.version}</td><td class="small">${v.type}</td><td class="small muted mono">${v.date}</td><td>${statusTag(v.status)}</td></tr>`).join('')}</tbody></table>`
-        : '<p class="small muted">暂无更多版本记录</p>'}
-    </div>
-    <div class="drawer-foot">
-      <button class="btn btn-secondary" id="drawer-close">关闭</button>
-      ${role === 'admin' ? '<button class="btn btn-primary" id="drawer-edit">编辑资产</button>' : ''}
-    </div>
-  </aside>`;
-  document.querySelector('.drawer-scrim').addEventListener('click', closeModal);
-  $('#drawer-x').addEventListener('click', closeModal);
-  $('#drawer-close').addEventListener('click', closeModal);
-  const edit = $('#drawer-edit');
-  if (edit) edit.addEventListener('click', () => showToast('编辑资产为示意功能，正式版接入资产管理 API'));
-}
 
-function resAssetsBody() {
-  const subTabs = [['models', '模型管理'], ['agents', 'Agent 管理'], ['versions', '训练版本']];
-  let table = '';
-  if (resState.assetTab === 'models') {
-    table = `<table class="report-table res-table-wrap">
-      <thead><tr><th>名称</th><th>来源</th><th>基础模型</th><th>版本</th><th>能力</th><th>状态</th><th></th></tr></thead>
-      <tbody>${RES_MODELS.map((m, i) => `
-        <tr><td style="font-weight:500">${esc(m.name)}</td><td class="small muted">${m.source}</td><td class="mono small">${esc(m.base)}</td>
-        <td class="mono small">${m.version}</td><td class="small">${m.caps.map((c) => `<span class="chip" style="margin-right:4px">${esc(c)}</span>`).join('')}</td>
-        <td>${statusTag(m.status)}</td>
-        <td style="text-align:right"><button class="btn btn-ghost btn-sm" data-asset-detail="models:${i}">详情</button></td></tr>`).join('')}
-      </tbody></table>`;
-  } else if (resState.assetTab === 'agents') {
-    table = `<table class="report-table res-table-wrap">
-      <thead><tr><th>名称</th><th>来源</th><th>绑定模型</th><th>版本</th><th>能力</th><th>状态</th><th></th></tr></thead>
-      <tbody>${RES_AGENTS.map((a, i) => `
-        <tr><td style="font-weight:500">${esc(a.name)}</td><td class="small muted">${a.source}</td><td class="mono small">${esc(a.bound)}</td>
-        <td class="mono small">${a.version}</td><td class="small">${a.caps.map((c) => `<span class="chip" style="margin-right:4px">${esc(c)}</span>`).join('')}</td>
-        <td>${statusTag(a.status)}</td>
-        <td style="text-align:right"><button class="btn btn-ghost btn-sm" data-asset-detail="agents:${i}">详情</button></td></tr>`).join('')}
-      </tbody></table>`;
-  } else {
-    table = `<table class="report-table res-table-wrap">
-      <thead><tr><th>资产</th><th>版本</th><th>类型</th><th>日期</th><th>状态</th></tr></thead>
-      <tbody>${RES_VERSIONS.map((v) => `
-        <tr><td style="font-weight:500">${esc(v.asset)}</td><td class="mono small">${v.version}</td><td class="small">${v.type}</td>
-        <td class="small muted mono">${v.date}</td><td>${statusTag(v.status)}</td></tr>`).join('')}
-      </tbody></table>`;
-  }
-  return `
-    <div class="tabs sub-tabs" style="margin:0 0 16px">
-      ${subTabs.map(([k, label]) => `<button class="tab-btn${resState.assetTab === k ? ' active' : ''}" data-asset-tab="${k}">${label}</button>`).join('')}
-    </div>
-    ${table}`;
-}
-function resUsersBody(role) {
-  if (role !== 'admin') {
-    return `<div class="card" style="padding:40px;text-align:center">
-      <p class="muted">用户与权限管理仅对管理员开放 · 当前角色 <span class="mono">${role}</span></p>
-      <p class="mini-note" style="margin-top:8px">如需调整成员权限，请联系管理员（林默）</p>
-    </div>`;
-  }
-  return `<table class="report-table res-table-wrap">
-    <thead><tr><th>用户</th><th>角色</th><th>状态</th><th>创建时间</th><th>最近登录</th><th></th></tr></thead>
-    <tbody>${RES_USERS.map((u, i) => `
-      <tr>
-        <td><div style="display:flex;align-items:center;gap:10px">
-          <span class="uc-avatar">${esc(u.name.slice(0, 1))}</span>
-          <span><span style="font-weight:500;display:block">${esc(u.name)}</span><span class="small muted mono">${esc(u.mail)}</span></span>
-        </div></td>
-        <td><span class="badge ${UC_ROLES[u.role].badgeCls}">${u.role}</span></td>
-        <td>${statusTag(u.status)}</td>
-        <td class="small muted mono">${u.created}</td>
-        <td class="small muted">${u.last}</td>
-        <td style="text-align:right"><button class="btn btn-ghost btn-sm" data-user-edit="${i}">修改权限</button></td>
-      </tr>`).join('')}
-    </tbody></table>
-    <p class="mini-note res-note">角色即平台权限边界：admin 管理资产与用户，operator 创建并执行任务，viewer 只读查看结果。</p>`;
-}
-function resEnvsBody(role) {
-  return `<div class="env-rows">
-    <div class="env-row2" style="padding:8px;font-size:12px;color:var(--muted-foreground)">
-      <span>名称</span><span>类型</span><span>状态</span><span>资源占用</span><span style="text-align:right">操作</span>
-    </div>
-    ${RES_ENVS.map((e, i) => `
-    <div class="env-row2">
-      <span style="font-weight:500">${esc(e.name)}</span>
-      <span><span class="badge ${e.type === 'Benchmark' ? 'badge-primary' : ''}">${e.type}</span></span>
-      ${statusTag(e.status)}
-      <span class="env-usage"><span class="prog-track"><span class="prog-fill" style="width:${e.usage}%"></span></span><span class="pct">${e.usage}%</span></span>
-      <span style="text-align:right"><button class="btn btn-ghost btn-sm" data-env-mg="${i}" ${role === 'viewer' ? 'disabled title="viewer 角色仅可查看"' : ''}>管理</button></span>
-    </div>`).join('')}
-  </div>
-  <p class="mini-note res-note">8 个 CVE 复现靶场 + 2 个行业仿真环境 + 1 个 Benchmark 数据集 · 占用为示意采样</p>`;
-}
-function resSysBody() {
-  return `
-  <div class="card-sub" style="margin-bottom:12px">服务健康</div>
-  <div class="health-grid">${RES_SERVICES.map((s) => `
-    <div class="health-card">
-      <div class="health-ico">${ICO[s.icon]}</div>
-      <div class="health-main">
-        <span class="t-strong" style="font-weight:600">${s.name}</span>
-        ${statusTag(s.status)}
-        <span class="health-sub">最近检查 ${s.checked}</span>
-        <span class="health-uptime">uptime ${s.uptime}</span>
-      </div>
-    </div>`).join('')}
-  </div>
-  <div class="card-sub" style="margin:20px 0 12px">计算资源</div>
-  <div class="compute-grid">${RES_COMPUTE.map((c) => `
-    <div class="compute-card">
-      <div class="compute-head"><span style="font-weight:600;font-size:14px">${c.name}</span><span class="pct">${c.pct}%</span></div>
-      <div class="prog-track"><div class="prog-fill" style="width:${c.pct}%"></div></div>
-      <div class="compute-detail">${c.detail}</div>
-    </div>`).join('')}
-  </div>`;
-}
-
-function renderResources() {
+function renderSystem() {
   const role = ucRole();
   const isAdmin = role === 'admin';
-  const tabs = [['assets', 'AI 资产'], ['users', '用户权限'], ['envs', '环境管理'], ['sys', '系统状态']];
-  let action = '';
-  if (resState.tab === 'sys') {
-    action = role === 'viewer'
-      ? '<button class="btn btn-outline btn-sm" disabled title="viewer 角色仅可查看">立即检查</button>'
-      : '<button class="btn btn-outline btn-sm" id="res-sys-check">立即检查</button>';
-  } else {
-    const label = { assets: '新增资产', users: '新增用户', envs: '新增环境' }[resState.tab];
-    if (isAdmin) action = `<button class="btn btn-primary btn-sm" id="res-add">${label}</button>`;
-    else if (role === 'operator') action = `<button class="btn btn-outline btn-sm" id="res-add-na">${label}</button>`;
-  }
-  const body = resState.tab === 'assets' ? resAssetsBody()
-    : resState.tab === 'users' ? resUsersBody(role)
-    : resState.tab === 'envs' ? resEnvsBody(role) : resSysBody();
+  const dis = isAdmin ? '' : 'disabled title="仅管理员可修改配置"';
   $('#view').innerHTML = `
   <div class="page">
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">资源中心</h2>
-        <p class="page-desc">AI 资产 / 用户权限 / 环境管理 / 系统状态 · 操作按当前角色 <span class="mono">${role}</span> 控制</p>
+        <h2 class="page-title">系统配置</h2>
+        <p class="page-desc">平台参数 / 服务状态 / 计算资源 / 用户权限 · 配置项仅管理员可编辑</p>
       </div>
-      ${action}
+      <span class="badge ${UC_ROLES[role].badgeCls}">当前角色 ${role}</span>
     </div>
-    <div class="tabs res-subtabs">
-      ${tabs.map(([k, label]) => `<button class="tab-btn${resState.tab === k ? ' active' : ''}" data-res-tab="${k}">${label}</button>`).join('')}
+    <div class="sys-grid">
+      <div class="card sys-card">
+        <h4>平台参数</h4>
+        <div class="sys-row"><span class="k">默认并发上限</span><input class="select" style="width:110px" type="number" value="256" min="1" max="1024" ${dis}></div>
+        <div class="sys-row"><span class="k">数据保留期</span><select class="select" style="width:110px" ${dis}><option>90 天</option><option selected>180 天</option><option>365 天</option></select></div>
+        <div class="sys-row"><span class="k">告警阈值</span><select class="select" style="width:110px" ${dis}><option>60%</option><option selected>70%</option><option>80%</option></select></div>
+        <div class="sys-row"><span class="k">会话超时</span><select class="select" style="width:110px" ${dis}><option>2 小时</option><option selected>8 小时</option><option>24 小时</option></select></div>
+        <div class="sys-row"><span class="k">API 访问令牌</span><span class="mono small muted">aisr-••••••••-0727</span><button class="btn btn-ghost btn-sm" id="sys-token" ${dis}>轮换</button></div>
+        <div style="margin-top:14px;text-align:right">
+          <button class="btn btn-primary btn-sm" id="sys-save" ${dis}>保存配置</button>
+        </div>
+      </div>
+      <div class="card sys-card">
+        <h4>服务状态</h4>
+        ${RES_SERVICES.map((s) => `
+        <div class="sys-row"><span class="k">${s.name}</span>${statusTag(s.status)}<span class="small muted mono">uptime ${s.uptime}</span></div>`).join('')}
+        <div style="margin-top:14px;text-align:right">
+          <button class="btn btn-outline btn-sm" id="sys-check" ${role === 'viewer' ? 'disabled title="viewer 角色仅可查看"' : ''}>立即检查</button>
+        </div>
+      </div>
+      <div class="card sys-card">
+        <h4>计算资源</h4>
+        ${RES_COMPUTE.map((c) => `
+        <div class="sys-row">
+          <span class="k">${c.name}</span>
+          <span class="env-usage" style="flex:1.4"><span class="prog-track"><span class="prog-fill" style="width:${c.pct}%"></span></span><span class="pct">${c.pct}%</span></span>
+          <span class="small muted mono">${c.detail}</span>
+        </div>`).join('')}
+      </div>
+      <div class="card sys-card">
+        <h4>用户与权限</h4>
+        ${RES_USERS.map((u, i) => `
+        <div class="sys-row">
+          <span class="uc-avatar">${esc(u.name.slice(0, 1))}</span>
+          <span class="k" style="flex:1"><span style="color:var(--foreground);font-weight:500">${esc(u.name)}</span> <span class="small muted mono">${esc(u.mail)}</span></span>
+          <span class="badge ${UC_ROLES[u.role].badgeCls}">${u.role}</span>
+          ${statusTag(u.status)}
+          <button class="btn btn-ghost btn-sm" data-user-edit="${i}" ${isAdmin ? '' : 'disabled title="仅管理员可修改权限"'}>修改权限</button>
+        </div>`).join('')}
+        <p class="mini-note" style="margin-top:12px">角色即平台权限边界：admin 管理资产与用户，operator 创建并执行任务，viewer 只读查看结果。</p>
+      </div>
     </div>
-    ${body}
   </div>`;
-  $$('[data-res-tab]').forEach((b) => b.addEventListener('click', () => { resState.tab = b.dataset.resTab; renderResources(); }));
-  $$('[data-asset-tab]').forEach((b) => b.addEventListener('click', () => { resState.assetTab = b.dataset.assetTab; renderResources(); }));
-  $$('[data-asset-detail]').forEach((b) => b.addEventListener('click', () => {
-    const [kind, idx] = b.dataset.assetDetail.split(':');
-    openAssetDrawer(kind, { models: RES_MODELS, agents: RES_AGENTS }[kind][Number(idx)]);
-  }));
-  $$('[data-env-mg]').forEach((b) => b.addEventListener('click', () => {
-    const env = RES_ENVS[Number(b.dataset.envMg)];
-    showToast(isAdmin ? `环境「${env.name}」管理为示意功能` : '需要管理员权限');
-  }));
+  $('#sys-save') && $('#sys-save').addEventListener('click', () => showToast('配置已保存（演示）'));
+  $('#sys-token') && $('#sys-token').addEventListener('click', () => showToast('令牌轮换为示意功能'));
+  const check = $('#sys-check');
+  if (check) check.addEventListener('click', () => showToast('检查完成：全部服务正常'));
   $$('[data-user-edit]').forEach((b) => b.addEventListener('click', () => {
     showToast(`修改「${RES_USERS[Number(b.dataset.userEdit)].name}」权限为示意功能`);
   }));
-  const add = $('#res-add');
-  if (add) add.addEventListener('click', () => showToast('新增为示意功能，正式版接入资源管理 API'));
-  const addNa = $('#res-add-na');
-  if (addNa) addNa.addEventListener('click', () => showToast('需要管理员权限'));
-  const check = $('#res-sys-check');
-  if (check) check.addEventListener('click', () => showToast('检查完成：全部服务正常'));
 }
 
 /* ══ 用户中心（示意：角色切换仅本地持久化，无权限控制）════════════════ */
