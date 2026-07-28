@@ -1336,3 +1336,18 @@ body {
 }
 .range-tab:hover { color: var(--foreground); }
 .range-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+/* ── 0727 改版 v5：landing 并行演示任务小窗（演示广度，更小窗格）── */
+.demo-minis { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; margin-bottom: 32px; }
+.runwin.mini .runwin-head { padding: 8px 12px; }
+.runwin.mini .runwin-title { font-size: 12.5px; }
+.runwin.mini .runwin-viz { min-height: 56px; padding: 6px 12px; }
+.runwin.mini .sim-risk { min-height: 44px; gap: 12px; font-size: 11.5px; }
+.runwin.mini .runwin-foot { padding: 8px 12px 10px; gap: 6px; }
+.runwin.mini .runwin-goto { padding: 6px 12px; font-size: 11px; }
+
+/* ── 0727 改版 v6：新建任务预览拓扑 = 控制台可操作拓扑 ── */
+.env-preview-topo .wz-topo-canvas { border-right: none; padding: 4px 6px; }
+.wz-env-preview .env-preview-topo .topo-svg { max-height: 300px; }
+.wz-topo-hint { margin-top: 8px; padding: 0 4px; }
+.env-preview-topo .rg-pop { z-index: 60; }
