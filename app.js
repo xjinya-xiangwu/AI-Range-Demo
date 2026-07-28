@@ -57,12 +57,7 @@ function openModal(html, mode) {
   $('#modal-root').innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal${cls ? ' ' + cls : ''}" role="dialog">${html}</div>`;
   $('[data-close]').addEventListener('click', closeModal);
 }
-/* 弹窗关闭钩子：演示控制台弹窗先把演示节点还原回任务中心，再清空弹窗 */
-let modalCloseHook = null;
 function closeModal() {
-  const hook = modalCloseHook;
-  modalCloseHook = null;
-  if (hook) hook();
   $('#modal-root').innerHTML = '';
   rgRoot = null;
 }
@@ -86,12 +81,13 @@ function router() {
   window.TrainingPipeline.unmount();
   clearTimers(); closeModal(); closeUserPop(); closeDlPop(); hideTopoTip(); closeRgPops();
   rgRoot = null;
-  const { route } = parseHash();
+  const { route, params } = parseHash();
   /* 运行中任务小圆点（sidebar · 靶场任务项） */
   const dot = $('#run-dot');
   if (dot) dot.style.display = sessionStorage.getItem('aisr-running') === '1' ? '' : 'none';
   const r = ROUTE_ALIASES[route] || route;
-  const nav = NAV_OF[r] || 'range-tasks';
+  let nav = NAV_OF[r] || 'range-tasks';
+  if (r === 'task-detail') nav = params.kind === 'training' || params.kind === 'rollout' ? 'training' : 'range-tasks';
   $$('#sidenav a').forEach((a) => a.classList.toggle('active', a.dataset.route === nav));
   if (r === 'eval-tasks') renderTasks('eval');
   else if (r === 'training') renderTasks('training');
@@ -100,6 +96,7 @@ function router() {
   else if (r === 'workbench') renderWorkbench();
   else if (r === 'range') renderRange();
   else if (r === 'marketplace') renderMarketplace();
+  else if (r === 'task-detail') renderTaskDetail(params.kind);
   else if (r === 'result-detail') renderResultDetail();
   else if (r === 'assets') renderAssets();
   else if (r === 'system') renderSystem();
@@ -128,7 +125,7 @@ const catShort = (id) => (CATEGORIES.find((c) => c.id === id) || {}).short || id
  * Landing 页 · 靶场任务 / 评测任务 / 训练场（演示型首页）
  * 首屏：数据仪表盘 + 实时任务窗 + 并行任务小窗（点击直达控制台）
  * ════════════════════════════════════════════════════════════════ */
-/* ── 并行演示任务小窗：landing 演示广度（更小窗格，点击进对应控制台）── */
+/* ── 并行运行任务小窗：各任务中心置顶多任务并行（点击进任务详情页）── */
 const LANDING_MINIS = {
   range: [
     { id: 'nuc', title: '核电指挥中心红蓝对抗', cat: 'redblue', badge: '靶场攻防任务', go: '#/range', goCn: '靶场', offset: 26000 },
@@ -152,7 +149,6 @@ function landingMinisHtml(kind) {
         <span class="live-dot"></span>
         <span class="runwin-title">${m.title}</span>
         <span class="badge badge-primary">${m.badge}</span>
-        <span class="badge badge-gold">演示任务</span>
       </div>
       <div class="runwin-viz"><div class="sim-risk" id="lm-viz-${m.id}"></div></div>
       <div class="runwin-foot">
@@ -169,8 +165,8 @@ function bindLandingMinis(kind) {
   const consoleOf = { redblue: 'range', eval: 'eval', training: 'training' };
   LANDING_MINIS[kind].forEach((m) => {
     const el = $('#lm-' + m.id);
-    el.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole(consoleOf[m.cat] || 'range'); });
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole(consoleOf[m.cat] || 'range'); });
+    el.addEventListener('click', () => openTaskDetail(consoleOf[m.cat] || 'range'));
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') openTaskDetail(consoleOf[m.cat] || 'range'); });
   });
   const tickAll = () => LANDING_MINIS[kind].forEach((m) => paintLandingMini(m));
   tickAll();
@@ -220,15 +216,16 @@ function paintLandingMini(m) {
 function demoLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示任务</span></div>
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span></div>
     ${rangeSectionHtml('grid', 'hero')}
   </div>`;
 }
 function bindDemoLoop() {
   rangeState.scene = 'grid';
   const heroSec = $('#rg-hero-sec');
-  heroSec.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole('range'); });
-  heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole('range'); });
+  heroSec.addEventListener('click', () => openTaskDetail('range'));
+  heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter') openTaskDetail('range'); });
+  bindRangeReport();
   paintRange('grid');
   every(tickRange, 1000);
 }
@@ -237,8 +234,8 @@ const evalSim = { tick: 0, idx: 0 };
 function evalLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示任务</span></div>
-    <section class="card eval-loop" id="el-sec" role="link" tabindex="0" aria-label="打开演示控制台" title="点击打开演示控制台">
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span></div>
+    <section class="card eval-loop" id="el-sec">
       <div class="el-head">
         <span class="live-dot"></span>
         <span class="el-title">GPT-4o 风险点全量评测 · 智能体执行</span>
@@ -261,8 +258,9 @@ function evalLoopHtml() {
 }
 function bindEvalLoop() {
   const sec = $('#el-sec');
-  sec.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole('eval'); });
-  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole('eval'); });
+  sec.addEventListener('click', () => openTaskDetail('eval'));
+  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') openTaskDetail('eval'); });
+  bindElFootReport();
   paintEvalLoop();
   every(tickEvalLoop, 1000);
 }
@@ -303,9 +301,9 @@ function paintEvalLoop() {
     }).join('');
     return `<div><div class="el-group-label">${g.id} · ${g.name}</div>${rows}</div>`;
   }).join('');
-  $('#el-foot').textContent = curStep
-    ? `[${fmtClock(new Date())}] 执行检测 ${curStep.tag} · ${curStep.action}`
-    : `[${fmtClock(new Date())}] 评测闭环 · 报告编号 RPT-${String(evalSim.tick).padStart(2, '0')} · 开始新一轮评测`;
+  $('#el-foot').innerHTML = curStep
+    ? esc(`[${fmtClock(new Date())}] 执行检测 ${curStep.tag} · ${curStep.action}`)
+    : esc(`[${fmtClock(new Date())}] 评测闭环 · 全部检测完成 · 报告 RPT-${String(evalSim.tick).padStart(2, '0')} 已生成`) + ` <button class="btn btn-outline btn-sm el-report-btn">查看运行报告</button>`;
 }
 function statCardsHtml(stats, compact) {
   return `<div class="stats-row${compact ? ' compact' : ''}">${stats.map(([label, num]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div></div>`).join('')}</div>`;
@@ -364,8 +362,8 @@ function trainChartSvg(shown) {
 function trainLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示任务</span></div>
-    <section class="card eval-loop tl-wrap" id="tl-sec" role="link" tabindex="0" aria-label="打开演示控制台" title="点击打开演示控制台">
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span></div>
+    <section class="card eval-loop tl-wrap" id="tl-sec">
       <div class="el-head">
         <span class="live-dot"></span>
         <span class="el-title">PentestGPT-Attack-v3 · 多轮次攻防对抗训练</span>
@@ -403,8 +401,9 @@ function trainLoopHtml() {
 }
 function bindTrainLoop() {
   const sec = $('#tl-sec');
-  sec.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole('training'); });
-  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole('training'); });
+  sec.addEventListener('click', () => openTaskDetail('training'));
+  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') openTaskDetail('training'); });
+  bindTlFootReport();
   paintTrainLoop();
   every(tickTrainLoop, 1000);
 }
@@ -431,9 +430,9 @@ function paintTrainLoop() {
   $('#tl-reward-val').textContent = TRAIN_ROUNDS.reward[i].toFixed(2);
   $('#tl-traj').textContent = (shown * 1450).toLocaleString() + ' 条';
   $('#tl-ckpt').textContent = 'v3.' + i;
-  $('#tl-foot').textContent = done
-    ? `[${fmtClock(new Date())}] 训练闭环 · 攻击成功率收敛至 20% · 防御成功率提升至 90% · 轨迹数据集与检查点已归档，开始新一轮训练`
-    : `[${fmtClock(new Date())}] R${shown}/12 · 攻击成功率 ${TRAIN_ROUNDS.atk[i]}% ↓ · 防御成功率 ${TRAIN_ROUNDS.def[i]}% ↑ · loss ${TRAIN_ROUNDS.loss[i].toFixed(2)} · 轨迹数据回流中`;
+  $('#tl-foot').innerHTML = done
+    ? esc(`[${fmtClock(new Date())}] 训练闭环 · 攻击成功率收敛至 20% · 防御成功率提升至 90% · 轨迹数据集与检查点已归档`) + ` <button class="btn btn-outline btn-sm tl-report-btn">查看运行报告</button>`
+    : esc(`[${fmtClock(new Date())}] R${shown}/12 · 攻击成功率 ${TRAIN_ROUNDS.atk[i]}% ↓ · 防御成功率 ${TRAIN_ROUNDS.def[i]}% ↑ · loss ${TRAIN_ROUNDS.loss[i].toFixed(2)} · 轨迹数据回流中`);
 }
 
 /* ── 多域并发 Rollout 数据生产演示窗：多个 domain 下多个模型并发 roll，
@@ -458,8 +457,8 @@ function rollCounts() {
 function rolloutLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示任务</span></div>
-    <section class="card eval-loop" id="ro-sec" role="link" tabindex="0" aria-label="打开演示控制台" title="点击打开演示控制台">
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span></div>
+    <section class="card eval-loop" id="ro-sec">
       <div class="el-head">
         <span class="live-dot"></span>
         <span class="el-title">多域并发 Rollout 数据生产</span>
@@ -477,8 +476,8 @@ function rolloutLoopHtml() {
 }
 function bindRolloutLoop() {
   const sec = $('#ro-sec');
-  sec.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole('rollout'); });
-  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole('rollout'); });
+  sec.addEventListener('click', () => openTaskDetail('rollout'));
+  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') openTaskDetail('rollout'); });
   paintRolloutLoop();
   every(tickRolloutLoop, 1000);
 }
@@ -516,59 +515,205 @@ function paintRolloutLoop() {
   $('#ro-foot').textContent = `[${fmtClock(new Date())}] ${cur.name} 域 ${cur.models.length} 个模型并发 roll 中 · 累计产出 ${total.toLocaleString()} 条 · 清洗合格率 ${passRate}%`;
 }
 
-/* ── 弹窗式演示控制台：点击演示任务打开（仅任务名 + 两个按钮，无控制台名 / 无切换标签）── */
-let demoConsoleOpen = false;
-const DEMO_CONSOLES = {
+/* ── 任务详情页：点击运行中任务进入（实时画面 + 执行参数 + 过程明细，信息密度更高）── */
+function openTaskDetail(kind) {
+  location.hash = '#/task-detail?kind=' + kind;
+}
+/* 运行报告：取对应类型已完成任务记录合成，跳转任务结果详情页 */
+const REPORT_BACK = { redblue: '#/range-tasks', agentrisk: '#/eval-tasks', eval: '#/eval-tasks', training: '#/training' };
+function openMockReport(cat) {
+  const t = [...PRESET_RESULTS, ...HISTORY_TASKS].find((x) => x.category === cat);
+  if (!t) return;
+  sessionStorage.setItem('aisr-lastRun', JSON.stringify(synthRecord(t)));
+  sessionStorage.setItem('aisr-reportBack', REPORT_BACK[cat] || '#/range-tasks');
+  location.hash = '#/result-detail';
+}
+/* 100% 完成态报告入口绑定：靶场窗报告横幅 / 评测窗 / 训练窗底部按钮 */
+function bindRangeReport() {
+  const rp = $('#rh-report');
+  if (rp) rp.addEventListener('click', (e) => { if (e.target.closest('#rg-report-btn')) { e.stopPropagation(); openMockReport('redblue'); } });
+}
+function bindElFootReport() {
+  const f = $('#el-foot');
+  if (f) f.addEventListener('click', (e) => { if (e.target.closest('.el-report-btn')) { e.stopPropagation(); openMockReport('eval'); } });
+}
+function bindTlFootReport() {
+  const f = $('#tl-foot');
+  if (f) f.addEventListener('click', (e) => { if (e.target.closest('.tl-report-btn')) { e.stopPropagation(); openMockReport('training'); } });
+}
+/* 详情页过程明细（每秒随主窗刷新） */
+function paintTdRangeNodes() {
+  const el = $('#td-range-nodes');
+  if (!el) return;
+  const sc = rangeSceneNow('grid'), st = rangeNodeStates('grid'), ctl = rangeCtl.grid;
+  const byId = Object.fromEntries(sc.nodes.map((n) => [n.id, n]));
+  el.innerHTML = `<table class="mini-table">
+    <thead><tr><th>攻击路径节点</th><th>IP</th><th>防护策略</th><th>状态</th></tr></thead>
+    <tbody>${sc.path.map((id, i) => {
+      const n = byId[id];
+      if (!n) return '';
+      const s = st[id] || 'idle';
+      const pol = POLICY_CN[(ctl.nodeCfg[id] || {}).policy || 'base'];
+      return `<tr><td>M${i + 1} ${esc(n.label)}</td><td class="mono">${esc(n.ip)}</td><td>${pol}</td><td>${RANGE_STATE_CN[s] || s}</td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+function paintTdEval() {
+  const el = $('#td-eval-steps');
+  if (!el) return;
+  const cur = Math.min(evalSim.idx, EVAL_STEPS.length);
+  el.innerHTML = `<table class="mini-table">
+    <thead><tr><th>检测项</th><th>检测维度</th><th>结论</th></tr></thead>
+    <tbody>${EVAL_STEPS.map((s, i) => {
+      const g = EVAL_GROUPS[s.g - 1].name;
+      if (i < cur) return `<tr><td>${s.name}</td><td class="small muted">${g}</td><td>${verdictBadge(s.verdict)}</td></tr>`;
+      if (i === cur) return `<tr><td>${s.name}</td><td class="small muted">${g}</td><td><span class="badge badge-primary">检测中</span></td></tr>`;
+      return `<tr class="muted"><td>${s.name}</td><td class="small muted">${g}</td><td><span class="badge">待检测</span></td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+function paintTdTrain() {
+  const el = $('#td-train-rounds');
+  if (!el) return;
+  const shown = trainShownRounds();
+  el.innerHTML = `<table class="mini-table">
+    <thead><tr><th>轮次</th><th class="num">攻击成功率</th><th class="num">防御成功率</th><th class="num">loss</th><th class="num">reward</th></tr></thead>
+    <tbody>${TRAIN_ROUNDS.atk.map((a, i) => {
+      const curRow = i === shown - 1;
+      return `<tr${i >= shown ? ' class="muted"' : ''}><td>${curRow ? '▸ ' : ''}R${i + 1}</td><td class="num">${a}%</td><td class="num">${TRAIN_ROUNDS.def[i]}%</td><td class="num">${TRAIN_ROUNDS.loss[i].toFixed(2)}</td><td class="num">${TRAIN_ROUNDS.reward[i].toFixed(2)}</td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+function paintTdRoll() {
+  const el = $('#td-roll-doms');
+  if (!el) return;
+  el.innerHTML = `<table class="mini-table">
+    <thead><tr><th>生产域</th><th>并发模型</th><th class="num">累计产出</th></tr></thead>
+    <tbody>${rollCounts().map((d) => `<tr><td>${d.name}</td><td class="small muted">${d.models.map((m) => m.m).join(' / ')}</td><td class="num">${d.models.reduce((a, m) => a + m.n, 0).toLocaleString()} 条</td></tr>`).join('')}</tbody></table>`;
+}
+const TASK_DETAILS = {
   range: {
-    title: '电网调度中心红蓝对抗',
-    el: () => $('#rg-hero-sec'),
+    title: '电网调度中心红蓝对抗', badge: '靶场攻防任务', back: '#/range-tasks', reportCat: 'redblue',
     create: () => openTemplateStep({ cat: 'redblue', mode: 'battle' }),
+    windowHtml: demoLoopHtml,
+    params: [
+      ['目标环境', '电网调度中心 · 10.60.1.0/24'],
+      ['攻击智能体', 'Mythos-Attack-v2 × 6 并发'],
+      ['防御策略', '强化 · 动态告警阈值 70%'],
+      ['攻击深度', '全链路渗透 · 跨 3 个安全区'],
+      ['业务仿真', '负荷 12.4GW · 频率 50.02Hz'],
+      ['超时时间', '45 分钟'],
+      ['报告模板', '标准红蓝攻防报告'],
+    ],
+    extraTitle: '攻击路径 · 节点状态明细',
+    extra: '<div id="td-range-nodes"></div>',
+    bind() {
+      rangeState.scene = 'grid';
+      paintRange('grid');
+      bindRangeReport();
+      paintTdRangeNodes();
+      every(() => { tickRange(); paintTdRangeNodes(); }, 1000);
+    },
   },
   eval: {
-    title: 'GPT-4o 风险点全量评测 · 智能体执行',
-    el: () => $('#el-sec'),
+    title: 'GPT-4o 风险点全量评测 · 智能体执行', badge: '评测任务', back: '#/eval-tasks', reportCat: 'eval',
     create: () => openTemplateStep({ cat: 'eval', objectKind: 'llm', objectId: 'gpt-4o' }),
+    windowHtml: evalLoopHtml,
+    params: [
+      ['评测对象', 'GPT-4o（大模型）'],
+      ['评测题库', '安全风险全量题库 v2.3 · 8 维度'],
+      ['攻击方法', '直接注入 / 间接注入 / 多轮诱导'],
+      ['评测轮次', '3 轮 · 动态题库采样'],
+      ['并发数', '8'],
+      ['判定阈值', '0.85'],
+      ['产出物', '评测报告 + 错题集'],
+    ],
+    extraTitle: '检测项明细（实时）',
+    extra: '<div id="td-eval-steps"></div>',
+    bind() {
+      paintEvalLoop();
+      bindElFootReport();
+      paintTdEval();
+      every(() => { tickEvalLoop(); paintTdEval(); }, 1000);
+    },
   },
   training: {
-    title: 'PentestGPT-Attack-v3 · 多轮次攻防对抗训练',
-    el: () => $('#tl-sec'),
+    title: 'PentestGPT-Attack-v3 · 多轮次攻防对抗训练', badge: '训练任务', back: '#/training', reportCat: 'training',
     create: () => openTrainTemplateStep(),
+    windowHtml: trainLoopHtml,
+    params: [
+      ['目标对象', 'PentestGPT-Attack-v3（智能体）'],
+      ['训练目标', '攻击能力强化（RL）'],
+      ['训练轮次', '12 轮 · 每轮 1,450 条轨迹'],
+      ['学习率', '2e-5 · cosine 衰减'],
+      ['批次大小', '128'],
+      ['奖励权重', '攻击 0.6 / 防御 0.4'],
+      ['产出物', '轨迹数据集 + 检查点'],
+    ],
+    extraTitle: '轮次指标明细',
+    extra: '<div id="td-train-rounds"></div>',
+    bind() {
+      paintTrainLoop();
+      bindTlFootReport();
+      paintTdTrain();
+      every(() => { tickTrainLoop(); paintTdTrain(); }, 1000);
+    },
   },
   rollout: {
-    title: '多域并发 Rollout 数据生产',
-    el: () => $('#ro-sec'),
+    title: '多域并发 Rollout 数据生产', badge: '训练数据任务', back: '#/training', reportCat: 'training',
     create: () => openTrainTemplateStep(),
+    windowHtml: rolloutLoopHtml,
+    params: [
+      ['生产域', '电网攻防 / Web 漏洞 / 内网渗透 / 社会工程'],
+      ['并发模型', '8 个 · 每域 2 个并发 roll'],
+      ['采样参数', '温度 0.9 · top-p 0.95'],
+      ['单域轮次', '3 轮'],
+      ['清洗规则', '去重 + 低质过滤 + 格式校验'],
+      ['入库目标', '智能体轨迹数据集'],
+    ],
+    extraTitle: '分域产出明细（实时）',
+    extra: '<div id="td-roll-doms"></div>',
+    bind() {
+      paintRolloutLoop();
+      paintTdRoll();
+      every(() => { tickRolloutLoop(); paintTdRoll(); }, 1000);
+    },
   },
 };
-function openDemoConsole(kind) {
-  const conf = DEMO_CONSOLES[kind];
-  const node = conf && conf.el();
-  if (!node || demoConsoleOpen) return;
-  /* 把演示节点原位移入弹窗（id 不重复，后台 tick 继续驱动同一节点）；关闭时还原 */
-  const marker = document.createComment('dc-slot');
-  node.parentNode.insertBefore(marker, node);
-  demoConsoleOpen = true;
-  modalCloseHook = () => {
-    if (marker.parentNode) marker.parentNode.insertBefore(node, marker);
-    marker.remove();
-    demoConsoleOpen = false;
-  };
-  openModal(`
-    <div class="modal-title serif">${conf.title}<span class="badge badge-gold" style="vertical-align:middle;margin-left:10px">演示任务</span></div>
-    <div class="demo-console-body" id="dc-body"></div>
-    <div class="modal-foot dc-foot">
-      <button class="btn btn-secondary" id="dc-back">返回任务中心</button>
-      <button class="btn btn-primary" id="dc-new">从此模板创建任务</button>
-    </div>`, 'full');
-  $('#dc-body').appendChild(node);
-  $('#dc-back').addEventListener('click', closeModal);
-  $('#dc-new').addEventListener('click', () => { closeModal(); conf.create(); });
+function renderTaskDetail(kind) {
+  const conf = TASK_DETAILS[kind] || TASK_DETAILS.range;
+  $('#view').innerHTML = `
+  <div class="page td-page">
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">${conf.title}</h2>
+        <p class="page-desc">${conf.badge} · 运行中 · 实时画面 / 执行参数 / 过程明细</p>
+      </div>
+      <div class="td-head-actions">
+        <button class="btn btn-secondary" id="td-back">← 返回任务中心</button>
+        <button class="btn btn-outline" id="td-report">查看运行报告</button>
+        <button class="btn btn-primary" id="td-new">从此模板创建任务</button>
+      </div>
+    </div>
+    ${conf.windowHtml()}
+    <div class="td-detail">
+      <div class="card td-card">
+        <div class="td-sec-title">执行参数</div>
+        <dl class="detail-kv td-kv">${conf.params.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      </div>
+      <div class="card td-card">
+        <div class="td-sec-title">${conf.extraTitle}</div>
+        ${conf.extra}
+      </div>
+    </div>
+  </div>`;
+  $('#td-back').addEventListener('click', () => { location.hash = conf.back; });
+  $('#td-report').addEventListener('click', () => openMockReport(conf.reportCat));
+  $('#td-new').addEventListener('click', conf.create);
+  conf.bind();
 }
 
 /* ════════════════════════════════════════════════════════════════
  * 任务中心（首页与任务中心合一：靶场 / 评测 / 训练首页即各自任务视图）
  * 页面分布：测试场页内标签（仅靶场/评测两个，训练场无标签）→ 任务仪表盘
- * → 运行中任务（演示任务置顶，点击打开弹窗式演示控制台）
+ * → 运行中任务（mock 任务置顶，点击进入任务详情页）
  * → 已完成任务（三标签 + 三操作）→ 风险分析（仅训练任务）
  * ════════════════════════════════════════════════════════════════ */
 const TASK_TYPE_CN = { eval: '评测任务', redblue: '靶场攻防任务', agentrisk: '行为风险评测', training: '训练任务' };
@@ -627,7 +772,7 @@ function renderTasks(tab) {
     ${tfTabsHtml()}
     <div class="history-head">任务仪表盘<span class="head-badge">实时</span></div>
     ${statCardsHtml(meta.stats, true)}
-    <div class="history-head">运行中任务<span class="head-badge" id="run-count-badge">${runningVisible() ? 1 : 0} 个 · ${DEMO_COUNT[tcFilter]} 个演示</span></div>
+    <div class="history-head">运行中任务<span class="head-badge" id="run-count-badge">${DEMO_COUNT[tcFilter] + (runningVisible() ? 1 : 0)} 个</span></div>
     <div id="demo-zone"></div>
     <div id="runwin-wrap" style="margin:16px 0 32px"></div>
     <div class="history-head">已完成任务</div>
@@ -814,7 +959,7 @@ function renderRunning() {
           <span class="mono"><span id="uw-pct">0%</span> · <span id="uw-time">00:00</span></span>
         </div>
       </div>
-      <div class="runwin-goto">点击进入${CONSOLE_CN[cfg.category] || '任务控制台'} →</div>
+      <div class="runwin-goto">查看任务详情 →</div>
     </div>
   </div>`;
   const go = () => { location.hash = consoleHashOf(cfg); };
@@ -908,6 +1053,7 @@ function renderDoneList() {
   const openReport = (id) => {
     const task = all.find((x) => x.id === id);
     sessionStorage.setItem('aisr-lastRun', JSON.stringify(synthRecord(task)));
+    sessionStorage.setItem('aisr-reportBack', location.hash || '#/range-tasks');
     location.hash = '#/result-detail';
   };
   $$('[data-done]').forEach((el) => el.addEventListener('click', () => openReport(el.dataset.done)));
@@ -1116,7 +1262,7 @@ function rangeSectionHtml(sceneKey, mode) {
         </div>
       </div>`;
   return `
-  <section class="card range-hero${hero ? ' range-showcase' : ''}"${hero ? ' id="rg-hero-sec" role="link" tabindex="0" aria-label="进入靶场控制台" title="点击进入靶场控制台"' : ''}>
+  <section class="card range-hero${hero ? ' range-showcase' : ''}"${hero ? ' id="rg-hero-sec" role="link" tabindex="0" aria-label="查看任务详情"' : ''}>
     <div class="rh-head">
       <span class="live-dot"></span>
       <span class="rh-title">${sc.title}</span>
@@ -1160,6 +1306,11 @@ function rangeSectionHtml(sceneKey, mode) {
       </aside>
     </div>
     <div class="rh-foot">
+      <div class="rh-report" id="rh-report">
+        <span class="rhr-title">✓ 任务完成 · 运行报告已生成</span>
+        <span class="rhr-stats" id="rh-report-stats"></span>
+        <button class="btn btn-primary btn-sm" id="rg-report-btn">查看完整报告</button>
+      </div>
       <div class="rh-prog-row">
         <span class="small muted" style="white-space:nowrap">攻击总进度</span>
         <div class="prog-track"><div class="prog-fill" id="rg-prog-fill" style="width:0%"></div></div>
@@ -1168,7 +1319,6 @@ function rangeSectionHtml(sceneKey, mode) {
       </div>
       <div class="rg-log" id="rg-log"></div>
     </div>
-    ${hero ? '<span class="rh-chip">点击进入靶场控制台 →</span>' : ''}
   </section>`;
 }
 function paintRange(sceneKey) {
@@ -1186,6 +1336,18 @@ function paintRange(sceneKey) {
   const pct = Math.round((done / sc.path.length) * 100);
   const pf = $('#rg-prog-fill'); if (pf) pf.style.width = pct + '%';
   const pp = $('#rg-prog-pct'); if (pp) pp.textContent = pct + '%';
+  /* 100% 完成：展示运行报告横幅（整体表现 / 攻防成功率） */
+  const rp = $('#rh-report');
+  if (rp) {
+    if (done >= sc.path.length) {
+      const atk = Math.min(94, 64 + done * 4);
+      const def = Math.max(18, Math.round(96 - atk * 0.62));
+      const grade = atk >= 88 ? 'A' : atk >= 76 ? 'B+' : 'B';
+      rp.classList.add('show');
+      const stEl = $('#rh-report-stats');
+      if (stEl) stEl.innerHTML = `整体表现 <b>${grade}</b> · 攻击成功率 <b>${atk}%</b> · 防御成功率 <b>${def}%</b> · 攻陷里程碑 <b>${done}/${sc.path.length}</b> · 用时 <b>${fmtElapsed(Date.now() - live.t0)}</b>`;
+    } else rp.classList.remove('show');
+  }
   const byId = Object.fromEntries(sc.nodes.map((n) => [n.id, n]));
   const ca = $('#rg-cur-action');
   if (ca) {
@@ -1522,7 +1684,7 @@ function renderRange() {
   const sceneKey = rangeState.scene;
   $('#view').innerHTML = `
   <div class="page range-console">
-    <div style="margin-bottom:16px"><a href="#/tasks" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
+    <div style="margin-bottom:16px"><a href="#/range-tasks" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
     <div class="page-head-row">
       <div>
         <h2 class="page-title">靶场控制台</h2>
@@ -1554,6 +1716,7 @@ function renderRange() {
   });
   bindRangeTopoNodes(sceneKey);
   bindRangeHud(sceneKey);
+  bindRangeReport();
   paintRange(sceneKey);
   every(tickRange, 1000);
 }
@@ -1573,7 +1736,7 @@ function renderDrill() {
     <div class="empty-state">
       <span class="serif">实战演练场 · 研发中</span>
       <p>该模块正在建设中，将支持多队伍红蓝对抗、演练编排、实时裁决与复盘回放。<br>当前版本请通过「任务中心」发起单人评测 / 攻防任务，或在「靶场控制台」观察常驻攻防实例。</p>
-      <a class="btn btn-outline" href="#/tasks">返回任务中心</a>
+      <a class="btn btn-outline" href="#/range-tasks">返回任务中心</a>
     </div>
   </div>`;
 }
@@ -1783,7 +1946,7 @@ function renderTrainingConsole() {
   const timer = { t0: isUserRun ? parseInt(sessionStorage.getItem('aisr-runStart') || String(Date.now()), 10) : Date.now() };
   $('#view').innerHTML = `
   <div class="page">
-    <div style="margin-bottom:16px"><a href="#/tasks" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
+    <div style="margin-bottom:16px"><a href="#/training" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
     <div class="page-head-row">
       <div>
         <h2 class="page-title">训练控制台 ${isUserRun ? '' : '<span class="badge" style="vertical-align:middle">演示实例</span>'}</h2>
@@ -1858,7 +2021,7 @@ function renderTrainingConsole() {
     sessionStorage.removeItem('aisr-runCfg');
     sessionStorage.removeItem('aisr-runStart');
     showToast('训练任务已结束 · 产出检查点已归档至资产中心（演示）');
-    location.hash = '#/tasks';
+    location.hash = '#/training';
   });
 }
 function tickTrainingConsole(cfg, t0) {
@@ -1904,7 +2067,7 @@ function renderMarketplace() {
         <h2 class="page-title">新建任务</h2>
         <p class="page-desc">任务类型决定评测对象，对象决定适用模板</p>
       </div>
-      <a class="btn btn-outline" href="#/tasks">返回任务中心</a>
+      <a class="btn btn-outline" href="${{ redblue: '#/range-tasks', agentrisk: '#/eval-tasks', eval: '#/eval-tasks' }[mpState.cat] || '#/tasks'}">返回任务中心</a>
     </div>
     <div class="steps-bar">
       ${stepItem(1, '任务类型')}<span class="step-sep">→</span>
@@ -2306,8 +2469,8 @@ function startRun(cfg) {
   sessionStorage.setItem('aisr-runCfg', JSON.stringify(cfg));
   sessionStorage.setItem('aisr-running', '1');
   sessionStorage.setItem('aisr-runStart', String(Date.now()));
-  /* 创建完任务统一跳转任务中心，运行中小窗立即可见 */
-  location.hash = '#/tasks';
+  /* 创建完任务跳转各自任务中心，运行中小窗立即可见 */
+  location.hash = { redblue: '#/range-tasks', agentrisk: '#/eval-tasks', eval: '#/eval-tasks', training: '#/training' }[cfg.category] || '#/range-tasks';
 }
 
 /* 文本占位符填充（按皮肤 targets + CVE）*/
@@ -2966,8 +3129,13 @@ function settle(auto) {
       <button class="btn btn-secondary" data-back>返回任务中心</button>
       <button class="btn btn-primary" data-report>查看任务结果</button>
     </div>`, true);
-  $('[data-back]').addEventListener('click', () => { location.hash = '#/tasks'; });
-  $('[data-report]').addEventListener('click', () => { location.hash = '#/result-detail'; });
+  $('[data-back]').addEventListener('click', () => {
+    location.hash = { redblue: '#/range-tasks', agentrisk: '#/eval-tasks', eval: '#/eval-tasks', training: '#/training' }[run.category] || '#/range-tasks';
+  });
+  $('[data-report]').addEventListener('click', () => {
+    sessionStorage.setItem('aisr-reportBack', REPORT_BACK[run.category] || '#/range-tasks');
+    location.hash = '#/result-detail';
+  });
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -3037,6 +3205,7 @@ function renderResultDetail() {
   }
 
   const start = new Date(rec.startedAt), end = new Date(rec.endedAt);
+  const backHash = sessionStorage.getItem('aisr-reportBack') || '#/tasks';
   const modeText = rec.category === 'eval'
     ? `评测任务 · ${esc(rec.objectLabel || '')}`
     : rec.category === 'redblue'
@@ -3133,9 +3302,35 @@ function renderResultDetail() {
       </div>
     </section>` : '';
 
+  /* 攻防对抗总览（靶场攻防报告核心板块：整体表现 + 攻防成功率） */
+  const battleSection = rec.category === 'redblue' ? (() => {
+    const base = rec.groupsTotal ? rec.groupsDone / rec.groupsTotal : 0;
+    const atk = Math.min(96, Math.round(58 + base * 34));
+    const def = Math.max(16, Math.round(96 - atk * 0.62));
+    const grade = atk >= 88 ? 'A' : atk >= 76 ? 'B+' : atk >= 62 ? 'B' : 'C';
+    const alerts = rec.timeline.filter((t) => t.fbType !== 'pass').length;
+    const ownedN = keyEvents.filter((e) => e.type === 'owned').length;
+    const detectN = keyEvents.filter((e) => e.type === 'detected').length;
+    return `
+    <section class="report-section">
+      <h2>攻防对抗总览</h2>
+      <div class="report-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="report-metric"><span class="small muted">整体表现</span><span class="mono" style="font-size:22px">${grade}</span></div>
+        <div class="report-metric"><span class="small muted">攻击成功率（红队）</span><span class="mono" style="color:var(--destructive)">${atk}%</span></div>
+        <div class="report-metric"><span class="small muted">防御成功率（蓝队）</span><span class="mono" style="color:var(--primary)">${def}%</span></div>
+        <div class="report-metric"><span class="small muted">检测 / 告警</span><span class="mono">${alerts} 次</span></div>
+      </div>
+      <div class="bt-bars">
+        <div class="bt-bar"><span>攻击方 · 红队</span><div class="bar-track"><div class="bar-fill" style="width:${atk}%;background:var(--destructive)"></div></div><b class="mono">${atk}%</b></div>
+        <div class="bt-bar"><span>防御方 · 蓝队</span><div class="bar-track"><div class="bar-fill" style="width:${def}%"></div></div><b class="mono">${def}%</b></div>
+      </div>
+      <p class="mini-note" style="margin-top:12px">结论：红队在 ${rec.groupsTotal} 个里程碑中攻陷 ${rec.groupsDone} 个（攻陷关键节点 ${ownedN} 个），攻击链路完整率 ${Math.round(base * 100)}%；蓝队在 ${detectN} 个节点触发检测，平均检测时延处于基线区间，建议对未被检测覆盖的横向移动路径补强监控策略。</p>
+    </section>`;
+  })() : '';
+
   v.innerHTML = `
   <div class="report">
-    <div style="margin-bottom:16px"><a href="#/tasks" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
+    <div style="margin-bottom:16px"><a href="${backHash}" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
     <div class="report-head">
       <div class="report-title">${rec.category === 'eval' ? '风险点评测报告' : '靶场任务可视化报告'}</div>
       <div class="report-badges">
@@ -3174,6 +3369,7 @@ function renderResultDetail() {
     </section>
 
     ${replayScrubSection}
+    ${battleSection}
     ${keySection}
     ${riskSection}
 
@@ -3205,7 +3401,7 @@ function renderResultDetail() {
 
     <div class="report-foot">
       <span class="mono">报告编号 ${rec.reportNo}</span>
-      <a class="btn btn-outline" href="#/tasks">返回任务中心</a>
+      <a class="btn btn-outline" href="${backHash}">返回任务中心</a>
     </div>
   </div>`;
 

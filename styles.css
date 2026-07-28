@@ -1453,3 +1453,49 @@ body {
 .done-row .dr-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .done-row .dr-actions { flex-wrap: nowrap; }
 .risk-row .dr-cell { white-space: nowrap; }
+
+/* ══ 任务详情页（点击运行中任务进入：实时画面 + 执行参数 + 过程明细）══ */
+.td-head-actions { display: flex; gap: 10px; flex: none; }
+.td-page .vc-wrap { margin-bottom: 16px; }
+.td-detail { display: grid; grid-template-columns: 360px 1fr; gap: 16px; margin: 0 0 32px; align-items: start; }
+.td-card { padding: 16px 18px; min-width: 0; }
+.td-sec-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.td-kv { grid-template-columns: 92px 1fr; font-size: 12.5px; row-gap: 7px; }
+.td-card .mini-table tr.muted { opacity: .5; }
+@media (max-width: 1100px) { .td-detail { grid-template-columns: 1fr; } .td-head-actions { flex-wrap: wrap; } }
+
+/* ══ 100% 完成态 · 运行报告横幅（靶场窗）══ */
+.rh-report {
+  display: none; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--chart-3); border-radius: var(--radius);
+  background: var(--card);
+}
+.rh-report.show { display: flex; }
+.rhr-title { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.rhr-stats { font-size: 12px; color: var(--muted-foreground); display: flex; gap: 12px; flex-wrap: wrap; }
+.rhr-stats b { color: var(--foreground); font-family: var(--font-mono); font-weight: 500; }
+#rg-report-btn { margin-left: auto; }
+.el-report-btn, .tl-report-btn { margin-left: 10px; }
+
+/* ══ 报告页 · 攻防对抗总览条形 ══ */
+.bt-bars { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.bt-bar { display: flex; align-items: center; gap: 12px; font-size: 12.5px; }
+.bt-bar > span { width: 104px; flex: none; color: var(--muted-foreground); white-space: nowrap; }
+.bt-bar .bar-track { flex: 1; }
+.bt-bar b { width: 44px; text-align: right; font-weight: 500; }
+
+/* ══ 任务窗口对齐：并行窗口等大对称、充满行宽 ══ */
+.demo-minis { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: stretch; }
+.demo-minis .runwin { height: 100%; display: flex; flex-direction: column; }
+.demo-minis .runwin-viz { flex: 1; display: flex; align-items: center; }
+.demo-minis .runwin-foot { margin-top: auto; }
+.runwin-grid { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.runwin-grid .runwin { height: 100%; display: flex; flex-direction: column; }
+.runwin-grid .runwin-viz { flex: 1; display: flex; align-items: center; }
+.runwin-grid .runwin-foot { margin-top: auto; }
+.demo-duo { gap: 16px; margin-bottom: 16px; }
+.demo-duo .vc-wrap { height: 100%; display: flex; flex-direction: column; margin-bottom: 0; }
+.demo-duo .vc-wrap .eval-loop { flex: 1; display: flex; flex-direction: column; margin-bottom: 0; }
+.demo-duo .vc-wrap .tl-body, .demo-duo .vc-wrap .ro-body { flex: 1; }
+.demo-duo .vc-wrap .el-foot { margin-top: auto; }
+.td-page .range-showcase { cursor: default; }
