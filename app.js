@@ -210,7 +210,9 @@ function paintLandingMini(m) {
 function demoLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span>
+      <button class="vc-new" id="vc-new-range" title="沿用该演示任务的模板配置发起新任务">从此模板新建任务 →</button>
+    </div>
     ${rangeSectionHtml('grid', 'hero')}
   </div>`;
 }
@@ -218,6 +220,10 @@ function bindDemoLoop() {
   const heroSec = $('#rg-hero-sec');
   heroSec.addEventListener('click', () => { location.hash = '#/range'; });
   heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter') location.hash = '#/range'; });
+  $('#vc-new-range').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openTemplateStep({ cat: 'redblue', mode: 'battle' });
+  });
   paintRange('grid');
   every(tickRange, 1000);
 }
@@ -226,8 +232,10 @@ const evalSim = { tick: 0, idx: 0 };
 function evalLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
-    <section class="card eval-loop">
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span>
+      <button class="vc-new" id="vc-new-eval" title="沿用该演示任务的模板配置发起新任务">从此模板新建任务 →</button>
+    </div>
+    <section class="card eval-loop" id="el-sec" role="link" tabindex="0" aria-label="进入评测控制台" title="点击进入评测控制台">
       <div class="el-head">
         <span class="live-dot"></span>
         <span class="el-title">GPT-4o 风险点全量评测 · 智能体执行</span>
@@ -249,6 +257,14 @@ function evalLoopHtml() {
   </div>`;
 }
 function bindEvalLoop() {
+  const go = () => { location.hash = '#/workbench'; };
+  const sec = $('#el-sec');
+  sec.addEventListener('click', go);
+  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  $('#vc-new-eval').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openTemplateStep({ cat: 'eval', objectKind: 'llm', objectId: 'gpt-4o' });
+  });
   paintEvalLoop();
   every(tickEvalLoop, 1000);
 }
@@ -350,7 +366,9 @@ function trainChartSvg(shown) {
 function trainLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span>
+      <button class="vc-new" id="vc-new-train" title="沿用该演示任务的训练配置发起新任务">从此模板新建任务 →</button>
+    </div>
     <section class="card eval-loop tl-wrap" id="tl-sec" role="link" tabindex="0" aria-label="进入训练控制台" title="点击进入训练控制台">
       <div class="el-head">
         <span class="live-dot"></span>
@@ -392,6 +410,10 @@ function bindTrainLoop() {
   const sec = $('#tl-sec');
   sec.addEventListener('click', go);
   sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  $('#vc-new-train').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openTrainTemplateStep();
+  });
   paintTrainLoop();
   every(tickTrainLoop, 1000);
 }
@@ -1516,6 +1538,28 @@ function openMarketplaceCat(cat) {
   openMarketplace(null);
   mpState.cat = cat; mpState.step = 2;
   renderMarketplace();
+}
+/* 从演示 case「从此模板新建任务」进入：直达向导最后一步（选择模板 / 模板配置） */
+function openTemplateStep(cfg) {
+  openMarketplace(null);
+  mpState.cat = cfg.cat;
+  mpState.objectKind = cfg.objectKind || 'agent';
+  mpState.objectId = cfg.objectId || '';
+  mpState.mode = cfg.mode || 'test';
+  mpState.agentId = cfg.agentId || '';
+  mpState.step = 3;
+  renderMarketplace();
+}
+/* 训练演示 case 直达训练向导最后一步（训练参数 / 摘要确认） */
+function openTrainTemplateStep() {
+  tnState.step = 3;
+  tnState.objectKind = tnState.objectKind || 'agent';
+  if (!(tnState.objectKind === 'llm' ? findLLM(tnState.objectId) : findAgent(tnState.objectId))) {
+    tnState.objectId = tnState.objectKind === 'llm' ? LLMS[0].id : AGENTS[0].id;
+  }
+  if (!tnState.goal) tnState.goal = TRAIN_GOALS[0].id;
+  if (parseHash().route === 'train-new') renderTrainNew();
+  else location.hash = '#/train-new';
 }
 
 /* ════════════════════════════════════════════════════════════════
