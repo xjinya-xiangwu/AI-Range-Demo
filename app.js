@@ -210,9 +210,7 @@ function paintLandingMini(m) {
 function demoLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span>
-      <button class="vc-new" id="vc-new-range" title="沿用该演示任务的模板配置发起新任务">从此模板新建任务 →</button>
-    </div>
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
     ${rangeSectionHtml('grid', 'hero')}
   </div>`;
 }
@@ -220,10 +218,6 @@ function bindDemoLoop() {
   const heroSec = $('#rg-hero-sec');
   heroSec.addEventListener('click', () => { location.hash = '#/range'; });
   heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter') location.hash = '#/range'; });
-  $('#vc-new-range').addEventListener('click', (e) => {
-    e.stopPropagation();
-    openTemplateStep({ cat: 'redblue', mode: 'battle' });
-  });
   paintRange('grid');
   every(tickRange, 1000);
 }
@@ -232,9 +226,7 @@ const evalSim = { tick: 0, idx: 0 };
 function evalLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span>
-      <button class="vc-new" id="vc-new-eval" title="沿用该演示任务的模板配置发起新任务">从此模板新建任务 →</button>
-    </div>
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
     <section class="card eval-loop" id="el-sec" role="link" tabindex="0" aria-label="进入评测控制台" title="点击进入评测控制台">
       <div class="el-head">
         <span class="live-dot"></span>
@@ -261,10 +253,6 @@ function bindEvalLoop() {
   const sec = $('#el-sec');
   sec.addEventListener('click', go);
   sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
-  $('#vc-new-eval').addEventListener('click', (e) => {
-    e.stopPropagation();
-    openTemplateStep({ cat: 'eval', objectKind: 'llm', objectId: 'gpt-4o' });
-  });
   paintEvalLoop();
   every(tickEvalLoop, 1000);
 }
@@ -366,9 +354,7 @@ function trainChartSvg(shown) {
 function trainLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span>
-      <button class="vc-new" id="vc-new-train" title="沿用该演示任务的训练配置发起新任务">从此模板新建任务 →</button>
-    </div>
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
     <section class="card eval-loop tl-wrap" id="tl-sec" role="link" tabindex="0" aria-label="进入训练控制台" title="点击进入训练控制台">
       <div class="el-head">
         <span class="live-dot"></span>
@@ -410,10 +396,6 @@ function bindTrainLoop() {
   const sec = $('#tl-sec');
   sec.addEventListener('click', go);
   sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
-  $('#vc-new-train').addEventListener('click', (e) => {
-    e.stopPropagation();
-    openTrainTemplateStep();
-  });
   paintTrainLoop();
   every(tickTrainLoop, 1000);
 }
@@ -1474,9 +1456,12 @@ function renderRange() {
         <h2 class="page-title">靶场控制台</h2>
         <p class="page-desc">图内直控攻防靶场 · 节点悬停快捷操作 / 点击节点配置 · 画布底部 HUD 环境控制 · 分区内 ＋ 添加节点</p>
       </div>
-      <div class="tabs sub-tabs" style="border-bottom:none;margin:0;gap:20px">
-        ${Object.values(RANGE_SCENES).map((s) =>
-          `<button class="tab-btn${sceneKey === s.key ? ' active' : ''}" data-range-scene="${s.key}">${s.name}</button>`).join('')}
+      <div style="display:flex;align-items:center;gap:14px">
+        <button class="btn btn-outline btn-sm" id="rg-new" title="沿用当前场景配置直达新建向导最后一步">从此模板新建任务</button>
+        <div class="tabs sub-tabs" style="border-bottom:none;margin:0;gap:20px">
+          ${Object.values(RANGE_SCENES).map((s) =>
+            `<button class="tab-btn${sceneKey === s.key ? ' active' : ''}" data-range-scene="${s.key}">${s.name}</button>`).join('')}
+        </div>
       </div>
     </div>
     ${rangeSectionHtml(sceneKey, 'console')}
@@ -1485,6 +1470,16 @@ function renderRange() {
     rangeState.scene = b.dataset.rangeScene;
     renderRange();
   }));
+  $('#rg-new').addEventListener('click', () => {
+    /* 沿用当前靶场场景配置直达新建向导最后一步（选择模板 / 模板配置） */
+    const runCfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
+    const prefill = runCfg && runCfg.category === 'redblue' ? runCfg : null;
+    openTemplateStep({
+      cat: 'redblue',
+      mode: prefill && prefill.mode ? prefill.mode : 'battle',
+      agentId: prefill && prefill.agentId ? prefill.agentId : '',
+    }, prefill);
+  });
   bindRangeTopoNodes(sceneKey);
   bindRangeHud(sceneKey);
   paintRange(sceneKey);
@@ -1539,8 +1534,9 @@ function openMarketplaceCat(cat) {
   mpState.cat = cat; mpState.step = 2;
   renderMarketplace();
 }
-/* 从演示 case「从此模板新建任务」进入：直达向导最后一步（选择模板 / 模板配置） */
-function openTemplateStep(cfg) {
+/* 从演示 case「从此模板新建任务」进入：直达向导最后一步（选择模板 / 模板配置）
+ * 传入 prefillCfg 时携带当前控制台配置，模板页顶部出现「预填配置」卡片 */
+function openTemplateStep(cfg, prefillCfg) {
   openMarketplace(null);
   mpState.cat = cfg.cat;
   mpState.objectKind = cfg.objectKind || 'agent';
@@ -1548,6 +1544,7 @@ function openTemplateStep(cfg) {
   mpState.mode = cfg.mode || 'test';
   mpState.agentId = cfg.agentId || '';
   mpState.step = 3;
+  if (prefillCfg) mpState.prefillCfg = { ...prefillCfg, category: cfg.cat };
   renderMarketplace();
 }
 /* 训练演示 case 直达训练向导最后一步（训练参数 / 摘要确认） */
@@ -1722,6 +1719,7 @@ function renderTrainingConsole() {
       </div>
       <div style="display:flex;gap:10px">
         <span class="env-status"><span class="dot dot-ok"></span>训练进行中</span>
+        <button class="btn btn-outline btn-sm" id="trc-new" title="沿用当前训练配置直达新建向导最后一步">从此模板新建任务</button>
         <button class="btn btn-outline btn-sm" id="trc-pause">暂停训练</button>
         <button class="btn btn-outline btn-sm" id="trc-reset">重置训练</button>
         <button class="btn btn-ghost btn-sm" id="trc-stop">结束任务</button>
@@ -1760,6 +1758,18 @@ function renderTrainingConsole() {
     </div>
   </div>`;
   every(() => tickTrainingConsole(cfg, timer.t0), 1000);
+  $('#trc-new').addEventListener('click', () => {
+    /* 沿用当前训练配置直达训练向导最后一步（训练参数 / 摘要确认） */
+    tnState.objectKind = cfg.objectKind || 'agent';
+    tnState.objectId = cfg.objectId || '';
+    tnState.goal = cfg.goal || tnState.goal;
+    tnState.epochs = cfg.epochs || tnState.epochs;
+    tnState.batch = cfg.batch || tnState.batch;
+    tnState.lr = cfg.lr || tnState.lr;
+    tnState.scale = cfg.scale || tnState.scale;
+    tnState.conc = cfg.conc || cfg.concurrency || tnState.conc;
+    openTrainTemplateStep();
+  });
   $('#trc-pause').addEventListener('click', () => {
     trc.paused = !trc.paused;
     $('#trc-pause').textContent = trc.paused ? '继续训练' : '暂停训练';
@@ -2353,6 +2363,7 @@ function renderWorkbench() {
         <div class="wb-metric"><span class="mono" id="m-score">0</span><span class="small">得分</span></div>
       </div>
       <div class="wb-actions">
+        <button class="btn btn-outline btn-sm" id="wb-new" title="沿用当前任务配置直达新建向导最后一步">从此模板新建任务</button>
         <button class="btn btn-outline btn-sm" id="btn-pause">暂停</button>
         <button class="btn btn-outline btn-sm" id="btn-reset">重置任务</button>
         <button class="btn btn-destructive btn-sm" id="btn-end">结束挑战</button>
@@ -2447,6 +2458,17 @@ function renderWorkbench() {
     el.textContent = `引擎健康度 ${h}% · 算力占用 ${c}% · 轮询 ${fmtClock(new Date())}`;
   }, 30000);
 
+  $('#wb-new').addEventListener('click', () => {
+    /* 沿用当前控制台任务配置直达新建向导最后一步（选择模板 / 模板配置） */
+    const cat = run.category === 'redblue' ? 'redblue' : 'eval';
+    openTemplateStep({
+      cat,
+      objectKind: run.cfg.objectKind || 'agent',
+      objectId: run.cfg.objectId || '',
+      mode: run.cfg.mode || 'test',
+      agentId: run.cfg.agentId || '',
+    }, run.cfg);
+  });
   $('#btn-pause').addEventListener('click', togglePause);
   $('#btn-reset').addEventListener('click', () => { clearTimers(); renderWorkbench(); });
   $('#btn-end').addEventListener('click', () => settle(false));

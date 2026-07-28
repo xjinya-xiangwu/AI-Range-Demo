@@ -1399,7 +1399,3 @@ body {
 /* ══ 资产中心 · admin 批量勾选 ═══════════════════════════════════ */
 .asset-card { position: relative; }
 .asset-check { position: absolute; top: 8px; right: 8px; width: 15px; height: 15px; accent-color: var(--chart-1); cursor: pointer; z-index: 2; }
-
-/* ══ 演示 case 右上角「从此模板新建任务」入口 ════════════════════ */
-.vc-new { margin-left: 12px; padding: 3px 10px; font-size: 11.5px; line-height: 1.5; border: 1px solid var(--chart-1); border-radius: 6px; background: transparent; color: var(--chart-1); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
-.vc-new:hover { background: var(--chart-1); color: #fff; }
