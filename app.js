@@ -52,8 +52,9 @@ function later(fn, ms) { const id = setTimeout(fn, ms); timers.push({ t: 'to', i
 function every(fn, ms) { const id = setInterval(fn, ms); timers.push({ t: 'iv', id }); return id; }
 function clearTimers() { timers.forEach((t) => (t.t === 'to' ? clearTimeout(t.id) : clearInterval(t.id))); timers = []; }
 
-function openModal(html, wide) {
-  $('#modal-root').innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal${wide ? ' wide' : ''}" role="dialog">${html}</div>`;
+function openModal(html, mode) {
+  const cls = mode === true ? 'wide' : mode || '';
+  $('#modal-root').innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal${cls ? ' ' + cls : ''}" role="dialog">${html}</div>`;
   $('[data-close]').addEventListener('click', closeModal);
 }
 /* 弹窗关闭钩子：演示控制台弹窗先把演示节点还原回任务中心，再清空弹窗 */
@@ -558,7 +559,7 @@ function openDemoConsole(kind) {
     <div class="modal-foot dc-foot">
       <button class="btn btn-secondary" id="dc-back">返回任务中心</button>
       <button class="btn btn-primary" id="dc-new">从此模板创建任务</button>
-    </div>`, true);
+    </div>`, 'full');
   $('#dc-body').appendChild(node);
   $('#dc-back').addEventListener('click', closeModal);
   $('#dc-new').addEventListener('click', () => { closeModal(); conf.create(); });
