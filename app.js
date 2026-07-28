@@ -890,7 +890,6 @@ function renderDoneList() {
       <div class="dr-title">
         <span>${esc(rec.title)}</span>
         ${t.example ? '<span class="badge badge-example">示例</span>' : ''}
-        <span class="dr-id">${t.id}</span>
       </div>
       <span class="badge badge-primary">${catShort(rec.category)}</span>
       ${verdictHtml}
