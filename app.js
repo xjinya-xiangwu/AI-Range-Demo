@@ -103,7 +103,7 @@ function router() {
   else if (r === 'assets') renderAssets();
   else if (r === 'system') renderSystem();
   else if (r === 'drill') renderDrill();
-  else if (r === 'tasks') renderTasks('all');
+  else if (r === 'tasks') renderTasks('range');
   else renderTasks('range');
   window.scrollTo(0, 0);
 }
@@ -566,41 +566,30 @@ function openDemoConsole(kind) {
 }
 
 /* ════════════════════════════════════════════════════════════════
- * 任务中心（首页与任务中心合一：靶场 / 评测 / 训练首页即对应标签的任务中心）
- * 页面分布：显眼标签页（置顶）→ 任务仪表盘（按标签统计，全部=汇总）
+ * 任务中心（首页与任务中心合一：靶场 / 评测 / 训练首页即各自任务视图）
+ * 页面分布：测试场页内标签（仅靶场/评测两个，训练场无标签）→ 任务仪表盘
  * → 运行中任务（演示任务置顶，点击打开弹窗式演示控制台）
- * → 已完成任务（三标签 + 三操作）→ 风险分析（仅训练任务标签）
+ * → 已完成任务（三标签 + 三操作）→ 风险分析（仅训练任务）
  * ════════════════════════════════════════════════════════════════ */
 const TASK_TYPE_CN = { eval: '评测任务', redblue: '靶场攻防任务', agentrisk: '行为风险评测', training: '训练任务' };
 const CONSOLE_CN = { eval: '评测控制台', redblue: '靶场控制台', agentrisk: '评测控制台', training: '训练控制台' };
 const TASK_TAB_OF = { redblue: 'range', agentrisk: 'eval', eval: 'eval', training: 'training' };
-const TC_TABS = [
-  { id: 'all', label: '全部任务' },
-  { id: 'range', label: '靶场任务' },
-  { id: 'eval', label: '评测任务' },
-  { id: 'training', label: '训练任务' },
-];
-/* 每个标签页独立的仪表盘数据（全部任务 = 汇总）与页头文案 */
+/* 每个页面独立的仪表盘数据与页头文案 */
 const TC_TAB_META = {
-  all: { stats: TASK_STATS, title: '任务中心', desc: '全部任务的统一运行视图 · 汇总数据 · 点击演示任务打开演示控制台' },
   range: { stats: RANGE_STATS, title: '任务中心 · 靶场任务', desc: '高仿真攻防靶场 · 红蓝对抗与渗透演练任务的统一运行视图' },
   eval: { stats: EVAL_STATS, title: '任务中心 · 评测任务', desc: '面向大模型与智能体的风险点全量评测 · 报告与错题集自动归集' },
   training: { stats: TRAIN_STATS, title: '任务中心 · 训练任务', desc: '训练数据产出与训练任务的统一运行视图 · RL 轨迹数据实时回流' },
 };
-let tcFilter = 'all';
-const tcMatch = (category) => tcFilter === 'all' || TASK_TAB_OF[category] === tcFilter;
-function tcTabsHtml() {
+let tcFilter = 'range';
+const tcMatch = (category) => TASK_TAB_OF[category] === tcFilter;
+/* 测试场页内标签（仅 靶场任务 / 评测任务 两个，路由级切换）；训练场无标签页 */
+function tfTabsHtml() {
+  if (tcFilter === 'training') return '';
   return `
   <div class="range-tabs tc-tabs-big" id="tc-tabs">
-    ${TC_TABS.map((t) => `<a class="range-tab${tcFilter === t.id ? ' active' : ''}" data-tc-tab="${t.id}">${t.label}</a>`).join('')}
+    <a class="range-tab${tcFilter === 'range' ? ' active' : ''}" href="#/range-tasks">靶场任务</a>
+    <a class="range-tab${tcFilter === 'eval' ? ' active' : ''}" href="#/eval-tasks">评测任务</a>
   </div>`;
-}
-function bindTcTabs() {
-  $$('#tc-tabs [data-tc-tab]').forEach((a) => a.addEventListener('click', () => {
-    if (a.dataset.tcTab === tcFilter) return;
-    clearTimers(); /* 整页重渲染前清掉旧 tick，避免计时器叠加 */
-    renderTasks(a.dataset.tcTab);
-  }));
 }
 function runningVisible() {
   const cfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
@@ -610,43 +599,33 @@ function consoleHashOf(cfg) {
   return cfg.category === 'redblue' ? '#/range' : cfg.category === 'training' ? '#/training-console' : '#/workbench';
 }
 
-/* 运行中任务区的演示任务（置顶）：各标签对应各自演示窗，训练 = 双 case 并行 */
+/* 运行中任务区的演示任务（置顶）：各页面对应各自演示窗，训练 = 双 case 并行 */
 function demoZoneHtml() {
-  if (tcFilter === 'range') return demoLoopHtml() + landingMinisHtml('range');
   if (tcFilter === 'eval') return evalLoopHtml() + landingMinisHtml('eval');
   if (tcFilter === 'training') return `<div class="demo-duo">${trainLoopHtml()}${rolloutLoopHtml()}</div>` + landingMinisHtml('training');
-  return `<div class="demo-duo">${demoLoopHtml()}${evalLoopHtml()}</div>
-    <div class="demo-duo" style="margin-top:16px">${trainLoopHtml()}${rolloutLoopHtml()}</div>`;
+  return demoLoopHtml() + landingMinisHtml('range');
 }
 function bindDemoZone() {
-  if (tcFilter === 'range') { bindDemoLoop(); bindLandingMinis('range'); }
-  else if (tcFilter === 'eval') { bindEvalLoop(); bindLandingMinis('eval'); }
+  if (tcFilter === 'eval') { bindEvalLoop(); bindLandingMinis('eval'); }
   else if (tcFilter === 'training') { bindTrainLoop(); bindRolloutLoop(); bindLandingMinis('training'); }
-  else { bindDemoLoop(); bindEvalLoop(); bindTrainLoop(); bindRolloutLoop(); }
+  else { bindDemoLoop(); bindLandingMinis('range'); }
 }
-const DEMO_COUNT = { all: 4, range: 3, eval: 3, training: 4 };
+const DEMO_COUNT = { range: 3, eval: 3, training: 4 };
 
 function renderTasks(tab) {
-  tcFilter = tab || 'all';
+  tcFilter = tab === 'eval' || tab === 'training' ? tab : 'range';
   const meta = TC_TAB_META[tcFilter];
   $('#view').innerHTML = `
   <div class="page">
     <div class="page-head-row">
-      <div class="page-head-left">
-        ${tcFilter === 'all' ? `
-        <a class="btn-back" href="#/range-tasks" title="返回首页（靶场任务）">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5 4.5 8l5.5 5.5"/></svg>
-          <span>返回首页</span>
-        </a>` : ''}
-        <div>
-          <h2 class="page-title">${meta.title}</h2>
-          <p class="page-desc">${meta.desc}</p>
-        </div>
+      <div>
+        <h2 class="page-title">${meta.title}</h2>
+        <p class="page-desc">${meta.desc}</p>
       </div>
       <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
     </div>
-    ${tcTabsHtml()}
-    <div class="history-head">任务仪表盘<span class="head-badge">实时 · ${TC_TABS.find((t) => t.id === tcFilter).label}</span></div>
+    ${tfTabsHtml()}
+    <div class="history-head">任务仪表盘<span class="head-badge">实时</span></div>
     ${statCardsHtml(meta.stats, true)}
     <div class="history-head">运行中任务<span class="head-badge" id="run-count-badge">${runningVisible() ? 1 : 0} 个 · ${DEMO_COUNT[tcFilter]} 个演示</span></div>
     <div id="demo-zone"></div>
@@ -657,7 +636,6 @@ function renderTasks(tab) {
   </div>`;
   $('#demo-zone').innerHTML = demoZoneHtml();
   bindDemoZone();
-  bindTcTabs();
   renderRunning();
   renderDoneList();
   renderRiskAnalysis();
