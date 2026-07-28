@@ -161,7 +161,6 @@ function landingMinisHtml(kind) {
           <span class="mono"><span id="lm-pct-${m.id}">0%</span> · <span id="lm-time-${m.id}">00:00</span></span>
         </div>
       </div>
-      <div class="runwin-goto">点击打开演示控制台 →</div>
     </div>`).join('')}
   </div>`;
 }
@@ -877,9 +876,15 @@ function renderDoneList() {
   $('#done-list').innerHTML = rows.map(({ t, i: idx }) => {
     const rec = synthRecord(t);
     const end = new Date(rec.endedAt);
+    const isTr = rec.category === 'training';
     const stat3 = rec.category === 'eval'
       ? `检出风险点 <b>${rec.riskItems.filter((r) => r.verdict !== 'pass').length}</b> 项`
-      : `攻陷里程碑 <b>${rec.groupsDone}/${rec.groupsTotal}</b>`;
+      : isTr
+        ? `训练 <b>${t.cfg.epochs || 12}</b> 轮 · loss 收敛`
+        : `攻陷里程碑 <b>${rec.groupsDone}/${rec.groupsTotal}</b>`;
+    const verdictHtml = isTr
+      ? '<span class="badge badge-olive">训练完成 · 已归档</span>'
+      : `<span class="badge ${rec.verdictClass === 'v-olive' ? 'badge-olive' : rec.verdictClass === 'v-gold' ? 'badge-gold' : 'badge-destructive'}">${rec.verdict}</span>`;
     return `
     <div class="done-row" data-done="${t.id}">
       <div class="dr-title">
@@ -888,9 +893,9 @@ function renderDoneList() {
         <span class="dr-id">${t.id}</span>
       </div>
       <span class="badge badge-primary">${catShort(rec.category)}</span>
-      <span class="badge ${rec.verdictClass === 'v-olive' ? 'badge-olive' : rec.verdictClass === 'v-gold' ? 'badge-gold' : 'badge-destructive'}">${rec.verdict}</span>
+      ${verdictHtml}
       <span class="dr-tags">${(DATA_TAGS[rec.category] || ['任务报告']).map((x) => `<span class="badge">${x}</span>`).join('')}</span>
-      <span class="dr-cell"><b>${rec.score}</b> 分</span>
+      <span class="dr-cell">${isTr ? '指标提升 <b>+18.2%</b>' : `<b>${rec.score}</b> 分`}</span>
       <span class="dr-cell">${fmtElapsed(rec.elapsedMs)} · ${stat3}</span>
       <span class="dr-cell">${end.toLocaleDateString('zh-CN')} · ${esc(executorLabel(rec))}</span>
       <span class="dr-actions">

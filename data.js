@@ -7,6 +7,7 @@ const CATEGORIES = [
   { id: 'eval',      name: '评测任务',          short: '评测' },
   { id: 'redblue',   name: '靶场 · 攻防测试',   short: '攻防测试' },
   { id: 'agentrisk', name: '靶场 · 实战挖掘',   short: '实战挖掘' },
+  { id: 'training',  name: '训练任务',          short: '训练' },
 ];
 const catName = (id) => (CATEGORIES.find((c) => c.id === id) || {}).name || id;
 
@@ -358,10 +359,25 @@ const AR_STEPS = [
 ];
 
 /* ── 场景注册表 ────────────────────────────────────────────────── */
+const TRAIN_GROUPS = [
+  { id: 1, name: '数据装载与初始化', steps: ['加载训练数据集', '初始化训练容器'] },
+  { id: 2, name: '对抗训练',         steps: ['Epoch 1–4 推进', 'Epoch 5–8 推进', 'Epoch 9–12 推进'] },
+  { id: 3, name: '评估与归档',       steps: ['验证集评估', '资产归档'] },
+];
+const TRAIN_STEPS = [
+  { g: 1, adv: 1, name: '加载训练数据集', cmd: 'data.load(dataset="攻防全链-5K")', out: '[数据] 5,000 条样本载入完成 · 轨迹格式校验通过', tag: 'DATA-LOAD', nodes: {}, score: 10 },
+  { g: 1, adv: 1, name: '初始化训练容器', cmd: 'cluster.up(containers=64)', out: '[环境] 64 个并发训练容器就绪 · 靶场环境镜像拉取完成', tag: 'ENV-INIT', nodes: {}, score: 10 },
+  { g: 2, adv: 1, name: 'Epoch 1–4 推进', cmd: 'train.run(epochs=1-4)', out: '[训练] loss 2.40 → 1.18 · reward 0.12 → 0.36 · 梯度更新正常', tag: 'TRAIN', nodes: {}, score: 20 },
+  { g: 2, adv: 1, name: 'Epoch 5–8 推进', cmd: 'train.run(epochs=5-8)', out: '[训练] loss 1.18 → 0.56 · reward 0.36 → 0.60 · ckpt 自动保存', tag: 'TRAIN', nodes: {}, score: 20 },
+  { g: 2, adv: 1, name: 'Epoch 9–12 推进', cmd: 'train.run(epochs=9-12)', out: '[训练] loss 0.56 → 0.18 · reward 0.60 → 0.87 · 收敛判定通过', tag: 'TRAIN', nodes: {}, score: 20 },
+  { g: 3, adv: 1, name: '验证集评估', cmd: 'eval.run(split=val)', out: '[评估] 攻击成功率收敛至 20% · 防御成功率提升至 90% · 回归测试通过', tag: 'EVAL', nodes: {}, score: 15 },
+  { g: 3, adv: 1, name: '资产归档', cmd: 'asset.archive(ckpt, traces)', out: '[归档] 模型检查点与轨迹数据集已归档资产中心 · 训练闭环', tag: 'ARCHIVE', nodes: {}, score: 15 },
+];
 const SCENARIOS = {
   redblue:   { groups: RB_GROUPS,   steps: RB_STEPS },
   eval:      { groups: EVAL_GROUPS, steps: EVAL_STEPS.map((s) => ({ ...s, adv: 1, nodes: {} })) },
   agentrisk: { groups: AR_GROUPS,   steps: AR_STEPS },
+  training:  { groups: TRAIN_GROUPS, steps: TRAIN_STEPS },
 };
 const scenarioTotal = (cat) => SCENARIOS[cat].groups.reduce((a, g) => a + g.steps.length, 0);
 
@@ -405,6 +421,18 @@ const HISTORY_TASKS = [
     cfg: { category: 'redblue', mode: 'test', envId: 'CVE-2023-4863', simEnv: 'nuclear',
       envTask: '运行日志分析', network: '跨区互联', modules: ['SCADA', '日志服务'],
       conditions: { load: 55, temp: 22, concurrency: 120, latency: 30 }, agentId: '' } },
+  { id: 'H-20260726-03', category: 'training', example: true, status: '已完成', date: '2026-07-26',
+    title: 'PentestGPT-Attack-v3 · 攻击能力强化训练',
+    cfg: { category: 'training', objectKind: 'agent', objectId: 'pentestgpt', goal: 'atk',
+      epochs: 12, batch: '32', lr: '5e-6', scale: '5K 条', conc: 64 } },
+  { id: 'H-20260723-06', category: 'training', example: false, status: '已完成', date: '2026-07-23',
+    title: 'Sentinel-7B · 防御策略优化训练',
+    cfg: { category: 'training', objectKind: 'agent', objectId: 'sentinel-7b', goal: 'def',
+      epochs: 16, batch: '64', lr: '1e-5', scale: '2W 条', conc: 128 } },
+  { id: 'H-20260718-07', category: 'training', example: false, status: '已完成', date: '2026-07-18',
+    title: 'Mythos-Attack-v2 · 红队对齐训练',
+    cfg: { category: 'training', objectKind: 'agent', objectId: 'mythos-attack-v2', goal: 'align',
+      epochs: 8, batch: '32', lr: '5e-6', scale: '1K 条', conc: 32 } },
 ];
 
 /* ── 模型评估对比 / 工具 ────────────────────────────────────────── */

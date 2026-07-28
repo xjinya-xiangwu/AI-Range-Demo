@@ -1434,3 +1434,12 @@ body {
 .demo-console-body .range-hero,
 .demo-console-body .eval-loop { cursor: default; }
 .dc-foot { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* ══ 设计整洁修复：按钮/徽标文字不溢出、字段不转行 ═══════════════ */
+.btn { white-space: nowrap; }
+.done-row { grid-template-columns: minmax(200px, 2fr) 84px 118px minmax(150px, 1.1fr) 64px minmax(140px, 1fr) 130px auto; }
+.done-row .badge { justify-self: start; }
+.done-row .dr-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+.done-row .dr-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.done-row .dr-actions { flex-wrap: nowrap; }
+.risk-row .dr-cell { white-space: nowrap; }
