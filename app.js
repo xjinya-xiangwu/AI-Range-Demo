@@ -297,42 +297,101 @@ function statCardsHtml(stats, compact) {
   return `<div class="stats-row${compact ? ' compact' : ''}">${stats.map(([label, num]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div></div>`).join('')}</div>`;
 }
 
-/* 训练流程模拟演示窗：训练步骤 + 训练进度（epoch / loss / reward），走完循环重播 */
-const TRAIN_LOOP_STEPS = [
-  { name: '数据装载', desc: '加载漏洞攻防全链数据集 · 5K 条样本' },
-  { name: '环境初始化', desc: '拉起 64 个并发训练容器 · 靶场环境就绪' },
-  { name: '对抗训练', desc: '红队对齐训练 · epoch 逐轮推进' },
-  { name: '评估验证', desc: '验证集攻击成功率与回归测试' },
-  { name: '资产归档', desc: '模型权重与轨迹数据集归档资产中心' },
-];
+/* 训练多轮次演示窗：主图 = 每轮次攻击/防御成功率双折线（攻击 80%→20%，防御 30%→90%）
+ * 小图 = loss / reward 过程指标；折线逐轮次绘制，走完循环重播；整窗点击进入训练控制台 */
+const TRAIN_ROUNDS = {
+  n: 12,
+  atk: [80, 76, 71, 65, 58, 51, 45, 39, 34, 29, 25, 20],
+  def: [30, 36, 43, 50, 57, 63, 69, 74, 79, 83, 87, 90],
+  loss: [2.40, 1.92, 1.51, 1.18, 0.92, 0.71, 0.56, 0.44, 0.35, 0.28, 0.22, 0.18],
+  reward: [0.12, 0.20, 0.28, 0.36, 0.44, 0.52, 0.60, 0.67, 0.73, 0.79, 0.83, 0.87],
+};
 const trainSim = { tick: 0 };
-const TRAIN_LOOP_TICKS = 84;
+const TRAIN_LOOP_TICKS = 34; /* 12 轮 × 2 tick + 完成停留 10 tick */
+function trainShownRounds() { return Math.min(TRAIN_ROUNDS.n, 1 + Math.floor(trainSim.tick / 2)); }
+/* 通用迷你折线 SVG：vals 全量数组，shown 为当前可见点数 */
+function miniLineSvg(vals, shown, opts) {
+  const W = opts.w, H = opts.h, P = { l: 6, r: 6, t: 8, b: 6 };
+  const n = vals.length;
+  const min = opts.min != null ? opts.min : Math.min(...vals);
+  const max = opts.max != null ? opts.max : Math.max(...vals);
+  const x = (i) => P.l + (i / (n - 1)) * (W - P.l - P.r);
+  const y = (v) => P.t + (1 - (v - min) / (max - min || 1)) * (H - P.t - P.b);
+  const pts = vals.slice(0, shown).map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const last = shown - 1;
+  return `<svg viewBox="0 0 ${W} ${H}" class="tl-spark" preserveAspectRatio="none">
+    <polyline points="${vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}" class="tl-line-ghost"/>
+    <polyline points="${pts}" class="tl-line" style="stroke:${opts.color}"/>
+    <circle cx="${x(last).toFixed(1)}" cy="${y(vals[last]).toFixed(1)}" r="3" class="tl-dot" style="fill:${opts.color}"/>
+  </svg>`;
+}
+/* 主图：成功率双折线（0–100% 坐标，网格 + 坐标轴 + 图例） */
+function trainChartSvg(shown) {
+  const W = 640, H = 300, P = { l: 44, r: 16, t: 16, b: 36 };
+  const n = TRAIN_ROUNDS.n;
+  const x = (i) => P.l + (i / (n - 1)) * (W - P.l - P.r);
+  const y = (v) => P.t + (1 - v / 100) * (H - P.t - P.b);
+  const grid = [0, 25, 50, 75, 100].map((g) => `
+    <line x1="${P.l}" y1="${y(g)}" x2="${W - P.r}" y2="${y(g)}" class="tl-grid"/>
+    <text x="${P.l - 8}" y="${y(g) + 4}" class="tl-axis" text-anchor="end">${g}%</text>`).join('');
+  const xlabels = TRAIN_ROUNDS.atk.map((_, i) => (i % 2 === 0 || i === n - 1)
+    ? `<text x="${x(i)}" y="${H - 12}" class="tl-axis" text-anchor="middle">R${i + 1}</text>` : '').join('');
+  const line = (vals, cls) => {
+    const pts = vals.slice(0, shown).map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const dots = vals.slice(0, shown).map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${i === shown - 1 ? 4 : 2.2}" class="${cls}-dot"/>`).join('');
+    return `<polyline points="${pts}" class="${cls}"/>${dots}`;
+  };
+  return `<svg viewBox="0 0 ${W} ${H}" class="tl-chart">
+    ${grid}${xlabels}
+    ${line(TRAIN_ROUNDS.atk, 'tl-atk')}
+    ${line(TRAIN_ROUNDS.def, 'tl-def')}
+  </svg>`;
+}
 function trainLoopHtml() {
   return `
   <div class="vc-wrap">
     <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
-    <section class="card eval-loop">
+    <section class="card eval-loop tl-wrap" id="tl-sec" role="link" tabindex="0" aria-label="进入训练控制台" title="点击进入训练控制台">
       <div class="el-head">
         <span class="live-dot"></span>
-        <span class="el-title">PentestGPT-Attack-v3 · 红队对齐训练</span>
+        <span class="el-title">PentestGPT-Attack-v3 · 多轮次攻防对抗训练</span>
         <span class="badge badge-primary">训练任务</span>
         <span class="env-status"><span class="dot dot-ok"></span>运行中</span>
         <span class="el-time mono" id="tl-time">00:00</span>
       </div>
-      <div class="el-body">
-        <div>
-          <div class="el-pct" id="tl-pct">0%</div>
-          <div class="prog-track" style="margin-top:6px"><div class="prog-fill" id="tl-fill" style="width:0%"></div></div>
-          <div class="el-cur" id="tl-cur">初始化训练任务…</div>
-          <div class="el-counts" id="tl-counts"></div>
+      <div class="tl-body">
+        <div class="tl-main">
+          <div class="tl-legend">
+            <span><i class="tl-sw tl-sw-atk"></i>攻击成功率 <b class="mono" id="tl-atk-val">80%</b></span>
+            <span><i class="tl-sw tl-sw-def"></i>防御成功率 <b class="mono" id="tl-def-val">30%</b></span>
+            <span class="tl-round mono" id="tl-round">轮次 R1/12</span>
+          </div>
+          <div id="tl-chart"></div>
         </div>
-        <div class="el-steps" id="tl-steps"></div>
+        <div class="tl-side">
+          <div class="tl-mini">
+            <div class="tl-mini-head"><span>loss 曲线</span><b class="mono" id="tl-loss-val">2.40</b></div>
+            <div id="tl-loss"></div>
+          </div>
+          <div class="tl-mini">
+            <div class="tl-mini-head"><span>reward 曲线</span><b class="mono" id="tl-reward-val">0.12</b></div>
+            <div id="tl-reward"></div>
+          </div>
+          <div class="tl-mini tl-kpis">
+            <div><span class="card-sub">本批轨迹数据</span><b class="mono" id="tl-traj">0 条</b></div>
+            <div><span class="card-sub">检查点</span><b class="mono" id="tl-ckpt">v3.0</b></div>
+          </div>
+        </div>
       </div>
-      <div class="el-foot" id="tl-foot">训练引擎就绪，等待数据装载…</div>
+      <div class="el-foot" id="tl-foot">训练引擎就绪，开始第 1 轮对抗训练…</div>
     </section>
   </div>`;
 }
 function bindTrainLoop() {
+  const go = () => { location.hash = '#/training-console'; };
+  const sec = $('#tl-sec');
+  sec.addEventListener('click', go);
+  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
   paintTrainLoop();
   every(tickTrainLoop, 1000);
 }
@@ -341,44 +400,27 @@ function tickTrainLoop() {
   if (trainSim.tick > TRAIN_LOOP_TICKS) trainSim.tick = 0;
   paintTrainLoop();
 }
-function trainStepOf(tick) {
-  if (tick < 5) return 0;
-  if (tick < 10) return 1;
-  if (tick < 70) return 2;
-  if (tick < 79) return 3;
-  return 4;
-}
 function paintTrainLoop() {
-  const fill = $('#tl-fill');
-  if (!fill) return;
+  const chart = $('#tl-chart');
+  if (!chart) return;
   const tick = trainSim.tick;
-  const step = trainStepOf(tick);
-  const done = tick >= TRAIN_LOOP_TICKS;
-  const epoch = Math.max(0, Math.min(12, Math.floor((tick - 10) / 5)));
-  const loss = (2.4 - (epoch / 12) * 2.22).toFixed(3);
-  const reward = (0.12 + (epoch / 12) * 0.75).toFixed(2);
-  const pct = done ? 100 : Math.round((tick / TRAIN_LOOP_TICKS) * 100);
-  fill.style.width = pct + '%';
-  $('#tl-pct').textContent = pct + '%';
-  $('#tl-time').textContent = fmtElapsed(tick * 1000);
-  $('#tl-cur').innerHTML = done
-    ? '训练完成 · 模型权重与轨迹数据集已归档'
-    : `当前步骤：<b>${TRAIN_LOOP_STEPS[step].name}</b> · ${TRAIN_LOOP_STEPS[step].desc}`;
-  $('#tl-counts').innerHTML = `
-    <span>epoch <b>${epoch}/12</b></span>
-    <span>loss <b style="color:var(--chart-1)">${loss}</b></span>
-    <span>reward <b style="color:var(--chart-3)">${reward}</b></span>
-    <span>并发容器 <b>64</b></span>`;
-  $('#tl-steps').innerHTML = TRAIN_LOOP_STEPS.map((s, i) => {
-    const st = done || i < step ? 'done' : i === step ? 'cur' : 'todo';
-    const mark = st === 'done' ? '✓' : st === 'cur' ? '▸' : '·';
-    return `<div class="el-step${st === 'cur' ? ' cur' : ''}"><span class="el-mark${st === 'done' ? ' v-pass' : ''}">${mark}</span>${s.name}</div>`;
-  }).join('');
+  const shown = trainShownRounds();
+  const done = shown >= TRAIN_ROUNDS.n;
+  const i = shown - 1;
+  chart.innerHTML = trainChartSvg(shown);
+  $('#tl-loss').innerHTML = miniLineSvg(TRAIN_ROUNDS.loss, shown, { w: 220, h: 84, color: 'var(--chart-1)', min: 0, max: 2.6 });
+  $('#tl-reward').innerHTML = miniLineSvg(TRAIN_ROUNDS.reward, shown, { w: 220, h: 84, color: 'var(--chart-3)', min: 0, max: 1 });
+  $('#tl-time').textContent = fmtElapsed(tick * 30000);
+  $('#tl-round').textContent = done ? '12 轮完成' : `轮次 R${shown}/12`;
+  $('#tl-atk-val').textContent = TRAIN_ROUNDS.atk[i] + '%';
+  $('#tl-def-val').textContent = TRAIN_ROUNDS.def[i] + '%';
+  $('#tl-loss-val').textContent = TRAIN_ROUNDS.loss[i].toFixed(2);
+  $('#tl-reward-val').textContent = TRAIN_ROUNDS.reward[i].toFixed(2);
+  $('#tl-traj').textContent = (shown * 1450).toLocaleString() + ' 条';
+  $('#tl-ckpt').textContent = 'v3.' + i;
   $('#tl-foot').textContent = done
-    ? `[${fmtClock(new Date())}] 训练闭环 · 产出模型权重 v3.${Math.floor(tick / 10)} 与轨迹数据集 · 开始新一轮训练`
-    : step === 2
-      ? `[${fmtClock(new Date())}] epoch ${epoch}/12 · loss ${loss} · reward ${reward} · 梯度更新正常`
-      : `[${fmtClock(new Date())}] ${TRAIN_LOOP_STEPS[step].desc}`;
+    ? `[${fmtClock(new Date())}] 训练闭环 · 攻击成功率收敛至 20% · 防御成功率提升至 90% · 轨迹数据集与检查点已归档，开始新一轮训练`
+    : `[${fmtClock(new Date())}] R${shown}/12 · 攻击成功率 ${TRAIN_ROUNDS.atk[i]}% ↓ · 防御成功率 ${TRAIN_ROUNDS.def[i]}% ↑ · loss ${TRAIN_ROUNDS.loss[i].toFixed(2)} · 轨迹数据回流中`;
 }
 
 function testfieldTabsHtml(active) {
@@ -490,6 +532,7 @@ function bindTcTabs() {
     $$('#tc-tabs .range-tab').forEach((x) => x.classList.toggle('active', x.dataset.tcTab === tcFilter));
     renderRunning();
     renderDoneList();
+    renderRiskAnalysis();
     const badge = $('#run-count-badge');
     if (badge) badge.textContent = `${runningVisible() ? 1 : 0} 个`;
   }));
@@ -525,12 +568,154 @@ function renderTasks() {
     <div id="runwin-wrap" style="margin-bottom:32px"></div>
     <div class="history-head">已完成任务</div>
     <div class="done-list" id="done-list"></div>
+    <div id="risk-wrap"></div>
   </div>`;
   bindTcTabs();
   renderRunning();
   renderDoneList();
+  renderRiskAnalysis();
   every(tickRunning, 1000);
   $('#btn-new-task').addEventListener('click', () => openMarketplace(null));
+}
+
+/* ── 风险分析板块：训练过程产生的风险数据，可批量分析 / 下载 / 管理，一键生成风险报告 ── */
+const RISK_DATA = [
+  { id: 'RSK-2607-01', name: '越狱诱导成功轨迹', source: 'PentestGPT-Attack-v3 · 第 8 轮', type: '攻击成功样本', level: 'high', count: 236, time: '07-27 22:14', archived: false },
+  { id: 'RSK-2607-02', name: '敏感信息泄露样本', source: 'Sentinel-7B · 防御训练', type: '数据泄露样本', level: 'high', count: 118, time: '07-27 20:02', archived: false },
+  { id: 'RSK-2607-03', name: '提示注入变体集合', source: 'ExploitCraft · 专精训练', type: '对抗样本', level: 'mid', count: 342, time: '07-27 16:45', archived: false },
+  { id: 'RSK-2607-04', name: '红线边界误判样本', source: '红队对齐训练 · 第 5 轮', type: '误判样本', level: 'mid', count: 205, time: '07-26 21:30', archived: false },
+  { id: 'RSK-2607-05', name: '工具调用越权轨迹', source: 'Mythos-Attack-v2 · 第 11 轮', type: '越权轨迹', level: 'high', count: 97, time: '07-26 15:12', archived: false },
+  { id: 'RSK-2607-06', name: '防御绕过对抗样本', source: 'Sentinel-7B · 防御训练', type: '对抗样本', level: 'low', count: 428, time: '07-25 19:48', archived: false },
+];
+const RISK_LEVEL = { high: ['高危', 'badge-destructive'], mid: ['中危', 'badge-gold'], low: ['低危', 'badge-olive'] };
+const riskSelected = new Set();
+function riskVisible() { return tcFilter === 'all' || tcFilter === 'training'; }
+function renderRiskAnalysis() {
+  const wrap = $('#risk-wrap');
+  if (!wrap) return;
+  if (!riskVisible()) { wrap.innerHTML = ''; return; }
+  const rows = RISK_DATA.filter((r) => !r.archived);
+  wrap.innerHTML = `
+  <div class="history-head" style="margin-top:32px">风险分析<span class="head-badge">训练过程风险数据 · ${rows.length} 批</span></div>
+  <div class="risk-bar">
+    <label class="risk-sel-all"><input type="checkbox" id="risk-sel-all"> 全选</label>
+    <span class="small muted" id="risk-sel-count">已选 0 批</span>
+    <span style="flex:1"></span>
+    <button class="btn btn-outline btn-sm" id="risk-batch-analyze" disabled>批量分析</button>
+    <button class="btn btn-outline btn-sm" id="risk-batch-dl" disabled>批量下载</button>
+    <button class="btn btn-primary btn-sm" id="risk-report">生成风险报告</button>
+  </div>
+  <div class="risk-list">
+    ${rows.map((r) => `
+    <div class="risk-row" data-risk="${r.id}">
+      <input type="checkbox" class="risk-check" data-risk-check="${r.id}" ${riskSelected.has(r.id) ? 'checked' : ''}>
+      <div class="risk-main">
+        <div class="risk-name">${esc(r.name)} <span class="dr-id">${r.id}</span></div>
+        <div class="risk-sub">来源：${esc(r.source)} · ${esc(r.type)}</div>
+      </div>
+      <span class="badge ${RISK_LEVEL[r.level][1]}">${RISK_LEVEL[r.level][0]}</span>
+      <span class="dr-cell"><b>${r.count}</b> 条</span>
+      <span class="dr-cell mono">${r.time}</span>
+      <span class="dr-actions">
+        <button class="btn btn-ghost btn-sm" data-risk-analyze="${r.id}">分析</button>
+        <button class="btn btn-ghost btn-sm" data-risk-archive="${r.id}">归档</button>
+      </span>
+    </div>`).join('') || '<div class="runwin-empty">全部风险数据已归档</div>'}
+  </div>`;
+  const updateSel = () => {
+    const n = riskSelected.size;
+    $('#risk-sel-count').textContent = `已选 ${n} 批`;
+    $('#risk-batch-analyze').disabled = n === 0;
+    $('#risk-batch-dl').disabled = n === 0;
+    $('#risk-sel-all').checked = n > 0 && n === rows.length;
+  };
+  $('#risk-sel-all').addEventListener('change', (e) => {
+    riskSelected.clear();
+    if (e.target.checked) rows.forEach((r) => riskSelected.add(r.id));
+    renderRiskAnalysis();
+  });
+  $$('[data-risk-check]').forEach((c) => c.addEventListener('change', () => {
+    if (c.checked) riskSelected.add(c.dataset.riskCheck); else riskSelected.delete(c.dataset.riskCheck);
+    updateSel();
+  }));
+  $$('[data-risk-analyze]').forEach((b) => b.addEventListener('click', () => openRiskAnalyze([b.dataset.riskAnalyze])));
+  $$('[data-risk-archive]').forEach((b) => b.addEventListener('click', () => {
+    const r = RISK_DATA.find((x) => x.id === b.dataset.riskArchive);
+    r.archived = true; riskSelected.delete(r.id);
+    renderRiskAnalysis();
+    showToast(`「${r.name}」已归档（演示）`);
+  }));
+  $('#risk-batch-analyze').addEventListener('click', () => openRiskAnalyze([...riskSelected]));
+  $('#risk-batch-dl').addEventListener('click', () => {
+    const items = RISK_DATA.filter((r) => riskSelected.has(r.id));
+    downloadBlob(`risk-data-${dlDate()}.json`, new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' }));
+    showToast(`已下载 ${items.length} 批风险数据 JSON`);
+  });
+  $('#risk-report').addEventListener('click', () => openRiskReport([...riskSelected]));
+  updateSel();
+}
+/* 批量 / 单条分析：等级分布 + 类型聚合（演示分析结果） */
+function openRiskAnalyze(ids) {
+  const items = RISK_DATA.filter((r) => ids.includes(r.id));
+  if (!items.length) return;
+  const lv = { high: 0, mid: 0, low: 0 };
+  const types = {};
+  items.forEach((r) => { lv[r.level] += r.count; types[r.type] = (types[r.type] || 0) + r.count; });
+  const total = items.reduce((a, r) => a + r.count, 0);
+  openModal(`
+    <div class="modal-title serif">风险数据分析结果</div>
+    <div class="modal-sub">${items.length} 批 · 共 ${total} 条风险样本</div>
+    <div class="modal-body">
+      <div class="stats-row">
+        <div class="card"><div class="card-sub">高危样本</div><div class="stat-num" style="color:var(--destructive)">${lv.high}</div></div>
+        <div class="card"><div class="card-sub">中危样本</div><div class="stat-num" style="color:var(--chart-4)">${lv.mid}</div></div>
+        <div class="card"><div class="card-sub">低危样本</div><div class="stat-num" style="color:var(--chart-3)">${lv.low}</div></div>
+      </div>
+      <table class="report-table" style="margin-top:14px">
+        <thead><tr><th>风险类型</th><th class="num">样本数</th><th class="num">占比</th></tr></thead>
+        <tbody>${Object.entries(types).map(([t, c]) => `<tr><td>${t}</td><td class="num">${c}</td><td class="num">${Math.round((c / total) * 100)}%</td></tr>`).join('')}</tbody>
+      </table>
+      <p class="mini-note" style="margin-top:12px">分析结论：高危样本集中于越狱诱导与越权调用轨迹，建议优先回流红队对齐训练并上调红线判定阈值。</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" id="risk-az-close">关闭</button>
+      <button class="btn btn-primary" id="risk-az-report">生成风险报告</button>
+    </div>`);
+  $('#risk-az-close').addEventListener('click', closeModal);
+  $('#risk-az-report').addEventListener('click', () => openRiskReport(ids));
+}
+/* 快速生成风险报告：弹窗预览 + 下载 Markdown 报告 */
+function openRiskReport(ids) {
+  const items = RISK_DATA.filter((r) => ids.includes(r.id));
+  const scope = items.length ? items : RISK_DATA.filter((r) => !r.archived);
+  const total = scope.reduce((a, r) => a + r.count, 0);
+  const high = scope.filter((r) => r.level === 'high');
+  const md = [
+    `# 训练风险数据报告`, ``,
+    `- 报告编号：RPT-RISK-${dlDate()}`, `- 生成时间：${new Date().toLocaleString('zh-CN')}`,
+    `- 覆盖范围：${scope.length} 批风险数据 · 共 ${total} 条样本`, `- 高危批次：${high.length} 批`, ``,
+    `## 风险数据明细`, ``,
+    ...scope.map((r) => `- [${RISK_LEVEL[r.level][0]}] ${r.name}（${r.id}）· 来源 ${r.source} · ${r.count} 条 · ${r.time}`), ``,
+    `## 结论与建议`, ``,
+    `1. 高危样本集中于越狱诱导与越权调用轨迹，建议优先回流红队对齐训练；`,
+    `2. 对抗样本占比持续上升，建议下一轮训练提高防御目标权重；`,
+    `3. 误判样本建议进入评测错题集，用于红线边界回归验证。`,
+  ].join('\n');
+  openModal(`
+    <div class="modal-title serif">风险报告已生成</div>
+    <div class="modal-sub mono">RPT-RISK-${dlDate()} · ${scope.length} 批 · ${total} 条样本</div>
+    <div class="modal-body">
+      <pre class="risk-report-preview">${esc(md)}</pre>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" id="risk-rp-close">关闭</button>
+      <button class="btn btn-primary" id="risk-rp-dl">下载风险报告（.md）</button>
+    </div>`);
+  $('#risk-rp-close').addEventListener('click', closeModal);
+  $('#risk-rp-dl').addEventListener('click', () => {
+    downloadBlob(`risk-report-${dlDate()}.md`, new Blob([md], { type: 'text/markdown;charset=utf-8' }));
+    showToast('风险报告已下载');
+  });
 }
 
 /* ── 运行中任务区：创建后立即可见的小窗，按任务类型模拟运行 ────── */
@@ -3228,29 +3413,34 @@ const ICO = {
  * 顶部整体资产数（题库 / 靶场环境 / 轨迹数据集 / 攻防数据集 / 评测目标）
  * 下方分区块展示具体数据集，卡片含下载（viewer 禁用）
  * ════════════════════════════════════════════════════════════════ */
+/* 资产勾选状态（admin 批量操作） */
+const assetSel = new Set();
 function renderAssets() {
   const role = ucRole();
+  const isAdmin = role === 'admin';
   const canDownload = role !== 'viewer';
   const tile = (txt, cls) => `<span class="asset-tile${cls ? ' ' + cls : ''}">${txt}</span>`;
   const dlBtn = (kind, idx) => `<button class="btn btn-outline btn-sm" data-asset-dl="${kind}:${idx}" ${canDownload ? '' : 'disabled title="viewer 角色仅可查看"'}>下载</button>`;
+  const check = (key) => isAdmin
+    ? `<input type="checkbox" class="asset-check" data-acheck="${key}" ${assetSel.has(key) ? 'checked' : ''}>` : '';
   const traceRow = (b) => ({ no: b.batch, title: b.source, cat: '轨迹数据集', score: b.count, ended: b.time });
-  $('#view').innerHTML = `
-  <div class="page">
-    <div class="page-head-row">
-      <div>
-        <h2 class="page-title">资产中心</h2>
-        <p class="page-desc">平台资产总览 · 题库 / 靶场环境 / 轨迹与攻防数据集 / 评测目标，分区块展示与下载</p>
-      </div>
-      <span class="badge ${UC_ROLES[role].badgeCls}">当前角色 ${role}</span>
-    </div>
-    <div class="stats-row five">
-      ${ASSET_STATS.map(([label, num, sub]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div><div class="card-sub" style="margin-top:6px">${sub}</div></div>`).join('')}
-    </div>
-
+  /* 操作员 / 观察员：重点展示安全攻防数据集、智能体轨迹数据集、靶场环境（题库不可见）；
+     管理员：可见全部资产（含评测题库）并具备批量操作权限 */
+  const stats = isAdmin ? ASSET_STATS : ASSET_STATS.filter(([label]) => label !== '评测题库');
+  const batchBar = isAdmin ? `
+    <div class="risk-bar" style="margin:20px 0 4px">
+      <label class="risk-sel-all"><input type="checkbox" id="asset-sel-all"> 全选</label>
+      <span class="small muted" id="asset-sel-count">已选 0 项</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-outline btn-sm" id="asset-batch-dl" disabled>批量下载</button>
+      <button class="btn btn-outline btn-sm" id="asset-batch-manage" disabled>批量管理</button>
+    </div>` : '';
+  const bankBlock = `
     <div class="asset-block-head">评测题库<span class="head-badge">${QUESTION_BANK_LIST.length} 套 · 对齐公开基准与自研红线</span></div>
     <div class="asset-grid">
       ${QUESTION_BANK_LIST.map((q, i) => `
       <div class="asset-card">
+        ${check(`bank:${i}`)}
         ${tile(q.name.slice(0, 1))}
         <div class="asset-body">
           <div class="asset-name">${esc(q.name)}</div>
@@ -3258,8 +3448,8 @@ function renderAssets() {
           <div class="asset-meta"><span><b>${q.items}</b> 题</span><span>更新 ${q.updated}</span><span class="asset-actions">${dlBtn('bank', i)}</span></div>
         </div>
       </div>`).join('')}
-    </div>
-
+    </div>`;
+  const envBlock = `
     <div class="asset-block-head">靶场环境<span class="head-badge">${ENVIRONMENTS.length} 个高仿真漏洞环境 · 点击卡片进入靶场控制台</span></div>
     <div class="asset-grid">
       ${ENVIRONMENTS.map((e) => `
@@ -3271,12 +3461,13 @@ function renderAssets() {
           <div class="asset-meta"><span>CVSS <b>${e.cvss}</b></span><span>${diffBadge(e.difficulty)}</span><span>时长 ${e.duration}</span></div>
         </div>
       </div>`).join('')}
-    </div>
-
+    </div>`;
+  const traceBlock = `
     <div class="asset-block-head">智能体轨迹数据集<span class="head-badge">${DATA_BATCHES.length} 批 · 攻防轨迹可回放</span></div>
     <div class="asset-grid">
       ${DATA_BATCHES.slice(0, 3).map((b, i) => `
       <div class="asset-card">
+        ${check(`trace:${i}`)}
         ${tile('轨', 't3')}
         <div class="asset-body">
           <div class="asset-name mono">${b.batch}</div>
@@ -3284,12 +3475,13 @@ function renderAssets() {
           <div class="asset-meta"><span><b>${b.count}</b> 条</span><span>${b.time}</span><span class="asset-actions">${dlBtn('trace', i)}</span></div>
         </div>
       </div>`).join('')}
-    </div>
-
+    </div>`;
+  const secBlock = `
     <div class="asset-block-head">安全攻防数据集<span class="head-badge">标注检测 · 红队语料 · 评测基准</span></div>
     <div class="asset-grid">
       ${DATA_BATCHES.slice(3).map((b, i) => `
       <div class="asset-card">
+        ${check(`sec:${i}`)}
         ${tile('防', 't5')}
         <div class="asset-body">
           <div class="asset-name mono">${b.batch}</div>
@@ -3297,16 +3489,34 @@ function renderAssets() {
           <div class="asset-meta"><span><b>${b.count}</b> 条</span><span>${b.time}</span><span class="asset-actions">${dlBtn('sec', i)}</span></div>
         </div>
       </div>`).join('')}
-    </div>
-
+    </div>`;
+  const targetBlock = `
     <div class="asset-block-head">评测目标<span class="head-badge">${RES_MODELS.length + RES_AGENTS.length} 个已接入 · 大模型与智能体</span></div>
     <div class="asset-chips">
       ${RES_MODELS.map((m) => `<span class="asset-chip">${esc(m.name)}<span class="badge badge-primary">大模型</span></span>`).join('')}
       ${RES_AGENTS.map((a) => `<span class="asset-chip">${esc(a.name)}<span class="badge badge-olive">智能体</span></span>`).join('')}
+    </div>`;
+  const blocks = isAdmin
+    ? [bankBlock, envBlock, traceBlock, secBlock, targetBlock]
+    : [secBlock, traceBlock, envBlock, targetBlock];
+  $('#view').innerHTML = `
+  <div class="page">
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">资产中心</h2>
+        <p class="page-desc">${isAdmin
+          ? '平台资产总览 · 题库 / 靶场环境 / 轨迹与攻防数据集 / 评测目标，支持批量下载与管理'
+          : '平台资产总览 · 重点展示安全攻防数据集 / 智能体轨迹数据集 / 靶场环境（评测题库仅管理员可见）'}</p>
+      </div>
+      <span class="badge ${UC_ROLES[role].badgeCls}">当前角色 ${role}</span>
     </div>
-
-    ${role === 'admin' ? bankAdminHtml() : ''}
-    <p class="mini-note res-note">资产由任务回流与训练合成持续沉淀${canDownload ? '' : ' · viewer 角色下载已禁用'}</p>
+    <div class="stats-row five">
+      ${stats.map(([label, num, sub]) => `<div class="card"><div class="card-sub">${label}</div><div class="stat-num">${num}</div><div class="card-sub" style="margin-top:6px">${sub}</div></div>`).join('')}
+    </div>
+    ${batchBar}
+    ${blocks.join('')}
+    ${isAdmin ? bankAdminHtml() : ''}
+    <p class="mini-note res-note">资产由任务回流与训练合成持续沉淀${isAdmin ? ' · admin 可批量勾选数据集执行批量操作' : ' · 评测题库与批量操作仅 admin 可用'}${canDownload ? '' : ' · viewer 角色下载已禁用'}</p>
   </div>`;
   $$('[data-asset-dl]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -3317,7 +3527,44 @@ function renderAssets() {
     openDlPop(b, kind, row);
   }));
   $$('[data-env-go]').forEach((c) => c.addEventListener('click', () => { location.hash = '#/range'; }));
-  if (role === 'admin') bindBankAdmin();
+  if (isAdmin) {
+    bindBankAdmin();
+    const allKeys = () => [
+      ...QUESTION_BANK_LIST.map((_, i) => `bank:${i}`),
+      ...DATA_BATCHES.slice(0, 3).map((_, i) => `trace:${i}`),
+      ...DATA_BATCHES.slice(3).map((_, i) => `sec:${i}`),
+    ];
+    const updateSel = () => {
+      const n = assetSel.size;
+      $('#asset-sel-count').textContent = `已选 ${n} 项`;
+      $('#asset-batch-dl').disabled = n === 0;
+      $('#asset-batch-manage').disabled = n === 0;
+      $('#asset-sel-all').checked = n > 0 && n === allKeys().length;
+    };
+    $('#asset-sel-all').addEventListener('change', (e) => {
+      assetSel.clear();
+      if (e.target.checked) allKeys().forEach((k) => assetSel.add(k));
+      renderAssets();
+    });
+    $$('[data-acheck]').forEach((c) => c.addEventListener('change', () => {
+      if (c.checked) assetSel.add(c.dataset.acheck); else assetSel.delete(c.dataset.acheck);
+      updateSel();
+    }));
+    $('#asset-batch-dl').addEventListener('click', () => {
+      const items = [...assetSel].map((k) => {
+        const [kind, i] = k.split(':');
+        return kind === 'bank'
+          ? { kind: '评测题库', ...QUESTION_BANK_LIST[Number(i)] }
+          : { kind: kind === 'trace' ? '智能体轨迹数据集' : '安全攻防数据集', ...traceRow(DATA_BATCHES.slice(kind === 'trace' ? 0 : 3)[Number(i)]) };
+      });
+      downloadBlob(`assets-batch-${dlDate()}.json`, new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' }));
+      showToast(`已打包下载 ${items.length} 项资产清单 JSON`);
+    });
+    $('#asset-batch-manage').addEventListener('click', () => {
+      showToast(`已提交 ${assetSel.size} 项资产的批量管理任务（归档 / 权限调整为演示示意）`);
+    });
+    updateSel();
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════
