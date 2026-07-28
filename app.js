@@ -56,7 +56,15 @@ function openModal(html, wide) {
   $('#modal-root').innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal${wide ? ' wide' : ''}" role="dialog">${html}</div>`;
   $('[data-close]').addEventListener('click', closeModal);
 }
-function closeModal() { $('#modal-root').innerHTML = ''; rgRoot = null; }
+/* 弹窗关闭钩子：演示控制台弹窗先把演示节点还原回任务中心，再清空弹窗 */
+let modalCloseHook = null;
+function closeModal() {
+  const hook = modalCloseHook;
+  modalCloseHook = null;
+  if (hook) hook();
+  $('#modal-root').innerHTML = '';
+  rgRoot = null;
+}
 
 /* ══ 路由 ═══════════════════════════════════════════════════════ */
 const ROUTE_ALIASES = { '': 'range-tasks', overview: 'range-tasks', portal: 'range-tasks', results: 'range-tasks', data: 'assets', resources: 'assets', report: 'result-detail' };
@@ -84,8 +92,8 @@ function router() {
   const r = ROUTE_ALIASES[route] || route;
   const nav = NAV_OF[r] || 'range-tasks';
   $$('#sidenav a').forEach((a) => a.classList.toggle('active', a.dataset.route === nav));
-  if (r === 'eval-tasks') renderEvalLanding();
-  else if (r === 'training') renderTrainingLanding();
+  if (r === 'eval-tasks') renderTasks('eval');
+  else if (r === 'training') renderTasks('training');
   else if (r === 'train-new') renderTrainNew();
   else if (r === 'training-console') renderTrainingConsole();
   else if (r === 'workbench') renderWorkbench();
@@ -95,8 +103,8 @@ function router() {
   else if (r === 'assets') renderAssets();
   else if (r === 'system') renderSystem();
   else if (r === 'drill') renderDrill();
-  else if (r === 'tasks') renderTasks();
-  else renderRangeLanding();
+  else if (r === 'tasks') renderTasks('all');
+  else renderTasks('range');
   window.scrollTo(0, 0);
 }
 
@@ -143,6 +151,7 @@ function landingMinisHtml(kind) {
         <span class="live-dot"></span>
         <span class="runwin-title">${m.title}</span>
         <span class="badge badge-primary">${m.badge}</span>
+        <span class="badge badge-gold">演示任务</span>
       </div>
       <div class="runwin-viz"><div class="sim-risk" id="lm-viz-${m.id}"></div></div>
       <div class="runwin-foot">
@@ -152,15 +161,16 @@ function landingMinisHtml(kind) {
           <span class="mono"><span id="lm-pct-${m.id}">0%</span> · <span id="lm-time-${m.id}">00:00</span></span>
         </div>
       </div>
-      <div class="runwin-goto">点击进入${m.goCn}控制台 →</div>
+      <div class="runwin-goto">点击打开演示控制台 →</div>
     </div>`).join('')}
   </div>`;
 }
 function bindLandingMinis(kind) {
+  const consoleOf = { redblue: 'range', eval: 'eval', training: 'training' };
   LANDING_MINIS[kind].forEach((m) => {
     const el = $('#lm-' + m.id);
-    el.addEventListener('click', () => { location.hash = m.go; });
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') location.hash = m.go; });
+    el.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole(consoleOf[m.cat] || 'range'); });
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole(consoleOf[m.cat] || 'range'); });
   });
   const tickAll = () => LANDING_MINIS[kind].forEach((m) => paintLandingMini(m));
   tickAll();
@@ -206,18 +216,19 @@ function paintLandingMini(m) {
       <span>渗透阶段 <b style="color:var(--primary)">${RANGE_KILLCHAIN[Math.min(5, Math.floor((i / RB_STEPS.length) * 6))]}</b></span>`);
   }
 }
-/* 循环演示窗：视频窗 chrome + 靶场 hero（整窗点击进入控制台） */
+/* 循环演示窗：视频窗 chrome + 靶场 hero（点击打开弹窗式演示控制台） */
 function demoLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示任务</span></div>
     ${rangeSectionHtml('grid', 'hero')}
   </div>`;
 }
 function bindDemoLoop() {
+  rangeState.scene = 'grid';
   const heroSec = $('#rg-hero-sec');
-  heroSec.addEventListener('click', () => { location.hash = '#/range'; });
-  heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter') location.hash = '#/range'; });
+  heroSec.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole('range'); });
+  heroSec.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole('range'); });
   paintRange('grid');
   every(tickRange, 1000);
 }
@@ -226,8 +237,8 @@ const evalSim = { tick: 0, idx: 0 };
 function evalLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
-    <section class="card eval-loop" id="el-sec" role="link" tabindex="0" aria-label="进入评测控制台" title="点击进入评测控制台">
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示任务</span></div>
+    <section class="card eval-loop" id="el-sec" role="link" tabindex="0" aria-label="打开演示控制台" title="点击打开演示控制台">
       <div class="el-head">
         <span class="live-dot"></span>
         <span class="el-title">GPT-4o 风险点全量评测 · 智能体执行</span>
@@ -249,10 +260,9 @@ function evalLoopHtml() {
   </div>`;
 }
 function bindEvalLoop() {
-  const go = () => { location.hash = '#/workbench'; };
   const sec = $('#el-sec');
-  sec.addEventListener('click', go);
-  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  sec.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole('eval'); });
+  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole('eval'); });
   paintEvalLoop();
   every(tickEvalLoop, 1000);
 }
@@ -354,8 +364,8 @@ function trainChartSvg(shown) {
 function trainLoopHtml() {
   return `
   <div class="vc-wrap">
-    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示</span></div>
-    <section class="card eval-loop tl-wrap" id="tl-sec" role="link" tabindex="0" aria-label="进入训练控制台" title="点击进入训练控制台">
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示任务</span></div>
+    <section class="card eval-loop tl-wrap" id="tl-sec" role="link" tabindex="0" aria-label="打开演示控制台" title="点击打开演示控制台">
       <div class="el-head">
         <span class="live-dot"></span>
         <span class="el-title">PentestGPT-Attack-v3 · 多轮次攻防对抗训练</span>
@@ -392,10 +402,9 @@ function trainLoopHtml() {
   </div>`;
 }
 function bindTrainLoop() {
-  const go = () => { location.hash = '#/training-console'; };
   const sec = $('#tl-sec');
-  sec.addEventListener('click', go);
-  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  sec.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole('training'); });
+  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole('training'); });
   paintTrainLoop();
   every(tickTrainLoop, 1000);
 }
@@ -427,94 +436,143 @@ function paintTrainLoop() {
     : `[${fmtClock(new Date())}] R${shown}/12 · 攻击成功率 ${TRAIN_ROUNDS.atk[i]}% ↓ · 防御成功率 ${TRAIN_ROUNDS.def[i]}% ↑ · loss ${TRAIN_ROUNDS.loss[i].toFixed(2)} · 轨迹数据回流中`;
 }
 
-function testfieldTabsHtml(active) {
+/* ── 多域并发 Rollout 数据生产演示窗：多个 domain 下多个模型并发 roll，
+ * 右侧给出初步清洗结论（去重 / 低质过滤 / 入库合格率），实时累加 ── */
+const ROLL_DOMAINS = [
+  { name: '电网攻防', models: [{ m: 'PentestGPT-v3', rate: 14, base: 1240 }, { m: 'ReconX-2', rate: 9, base: 860 }] },
+  { name: 'Web 漏洞', models: [{ m: 'Mythos-Attack-v2', rate: 17, base: 1520 }, { m: 'GPT-4o-Red', rate: 11, base: 980 }] },
+  { name: '内网渗透', models: [{ m: 'ExploitCraft', rate: 12, base: 1140 }, { m: 'PentestGPT-v3', rate: 8, base: 720 }] },
+  { name: '社会工程', models: [{ m: 'Mythos-Attack-v2', rate: 7, base: 640 }, { m: 'Sentinel-7B', rate: 5, base: 430 }] },
+];
+const rollSim = { tick: 0 };
+function rollCounts() {
+  /* 每个模型：基础量 + tick × 速率 + 轻微抖动，体现并发 roll */
+  return ROLL_DOMAINS.map((d, di) => ({
+    name: d.name,
+    models: d.models.map((m, mi) => ({
+      m: m.m,
+      n: m.base + rollSim.tick * m.rate + Math.round(6 * Math.sin(rollSim.tick * 0.7 + di * 2 + mi)),
+    })),
+  }));
+}
+function rolloutLoopHtml() {
   return `
-  <div class="range-tabs">
-    <a class="range-tab${active === 'range' ? ' active' : ''}" href="#/range-tasks">靶场任务</a>
-    <a class="range-tab${active === 'eval' ? ' active' : ''}" href="#/eval-tasks">评测任务</a>
+  <div class="vc-wrap">
+    <div class="video-chrome"><span class="vc-rec"></span><span>实时任务画面</span><span class="vc-tag">演示任务</span></div>
+    <section class="card eval-loop" id="ro-sec" role="link" tabindex="0" aria-label="打开演示控制台" title="点击打开演示控制台">
+      <div class="el-head">
+        <span class="live-dot"></span>
+        <span class="el-title">多域并发 Rollout 数据生产</span>
+        <span class="badge badge-primary">训练数据任务</span>
+        <span class="env-status"><span class="dot dot-ok"></span>运行中</span>
+        <span class="el-time mono" id="ro-time">00:00</span>
+      </div>
+      <div class="ro-body">
+        <div class="ro-domains" id="ro-domains"></div>
+        <div class="ro-clean" id="ro-clean"></div>
+      </div>
+      <div class="el-foot" id="ro-foot">Rollout 引擎就绪，等待调度…</div>
+    </section>
   </div>`;
 }
-
-function renderRangeLanding() {
-  rangeState.scene = 'grid';
-  $('#view').innerHTML = `
-  <div class="page">
-    <div class="page-head-row">
-      <div>
-        <h2 class="page-title">测试场 · 靶场任务</h2>
-        <p class="page-desc">高仿真攻防靶场 · 红蓝对抗与渗透演练任务入口</p>
-      </div>
-      <div style="display:flex;gap:10px">
-        <a class="btn btn-ghost" href="#/tasks">任务中心</a>
-        <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
-      </div>
-    </div>
-    ${testfieldTabsHtml('range')}
-    <div class="history-head">数据仪表盘</div>
-    ${statCardsHtml(TASK_STATS, true)}
-    ${demoLoopHtml()}
-    ${landingMinisHtml('range')}
-  </div>`;
-  bindDemoLoop();
-  bindLandingMinis('range');
-  $('#btn-new-task').addEventListener('click', () => openMarketplace(null));
+function bindRolloutLoop() {
+  const sec = $('#ro-sec');
+  sec.addEventListener('click', () => { if (!demoConsoleOpen) openDemoConsole('rollout'); });
+  sec.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !demoConsoleOpen) openDemoConsole('rollout'); });
+  paintRolloutLoop();
+  every(tickRolloutLoop, 1000);
+}
+function tickRolloutLoop() { rollSim.tick += 1; paintRolloutLoop(); }
+function paintRolloutLoop() {
+  const wrap = $('#ro-domains');
+  if (!wrap) return;
+  const doms = rollCounts();
+  const total = doms.reduce((a, d) => a + d.models.reduce((b, m) => b + m.n, 0), 0);
+  const maxN = Math.max(...doms.flatMap((d) => d.models.map((m) => m.n)));
+  const dedup = Math.round(total * 0.118);
+  const lowq = Math.round(total * 0.074);
+  const kept = total - dedup - lowq;
+  const passRate = ((kept / total) * 100).toFixed(1);
+  wrap.innerHTML = doms.map((d) => `
+    <div class="ro-domain">
+      <div class="ro-domain-name">${d.name}</div>
+      ${d.models.map((m) => `
+      <div class="ro-model">
+        <span class="ro-model-name mono">${m.m}</span>
+        <span class="prog-track ro-track"><span class="prog-fill" style="width:${Math.round((m.n / maxN) * 100)}%"></span></span>
+        <span class="ro-n mono"><b>${m.n.toLocaleString()}</b> 条</span>
+      </div>`).join('')}
+    </div>`).join('');
+  $('#ro-clean').innerHTML = `
+    <div class="ro-clean-title">初步清洗结论 · 实时</div>
+    <div class="ro-clean-row"><span>累计 roll 产出</span><b class="mono">${total.toLocaleString()} 条</b></div>
+    <div class="ro-clean-row"><span>去重剔除</span><b class="mono" style="color:var(--chart-4)">−${dedup.toLocaleString()} 条</b></div>
+    <div class="ro-clean-row"><span>低质过滤</span><b class="mono" style="color:var(--chart-4)">−${lowq.toLocaleString()} 条</b></div>
+    <div class="ro-clean-row ro-kept"><span>通过入库</span><b class="mono" style="color:var(--chart-3)">${kept.toLocaleString()} 条</b></div>
+    <div class="prog-track" style="margin-top:8px"><div class="prog-fill" style="width:${passRate}%;background:var(--chart-3)"></div></div>
+    <div class="ro-rate mono">清洗合格率 ${passRate}%</div>`;
+  $('#ro-time').textContent = fmtElapsed(rollSim.tick * 60000);
+  const cur = ROLL_DOMAINS[rollSim.tick % ROLL_DOMAINS.length];
+  $('#ro-foot').textContent = `[${fmtClock(new Date())}] ${cur.name} 域 ${cur.models.length} 个模型并发 roll 中 · 累计产出 ${total.toLocaleString()} 条 · 清洗合格率 ${passRate}%`;
 }
 
-function renderEvalLanding() {
-  $('#view').innerHTML = `
-  <div class="page">
-    <div class="page-head-row">
-      <div>
-        <h2 class="page-title">测试场 · 评测任务</h2>
-        <p class="page-desc">面向大模型与智能体的风险点全量评测 · 报告与错题集自动归集</p>
-      </div>
-      <div style="display:flex;gap:10px">
-        <a class="btn btn-ghost" href="#/tasks">任务中心</a>
-        <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
-      </div>
-    </div>
-    ${testfieldTabsHtml('eval')}
-    <div class="history-head">数据仪表盘</div>
-    ${statCardsHtml(EVAL_STATS, true)}
-    ${evalLoopHtml()}
-    ${landingMinisHtml('eval')}
-  </div>`;
-  bindEvalLoop();
-  bindLandingMinis('eval');
-  $('#btn-new-task').addEventListener('click', () => openMarketplaceCat('eval'));
-}
-
-function renderTrainingLanding() {
-  $('#view').innerHTML = `
-  <div class="page">
-    <div class="page-head-row">
-      <div>
-        <h2 class="page-title">训练场</h2>
-        <p class="page-desc">训练数据产出总览 · 目标导向的攻防能力训练</p>
-      </div>
-      <div style="display:flex;gap:10px">
-        <a class="btn btn-ghost" href="#/tasks">任务中心</a>
-        <button class="btn btn-primary" id="btn-new-train">＋ 新建训练任务</button>
-      </div>
-    </div>
-    <div class="history-head">数据产出仪表盘</div>
-    ${statCardsHtml(TRAIN_STATS, true)}
-    ${trainLoopHtml()}
-    ${landingMinisHtml('training')}
-  </div>`;
-  bindTrainLoop();
-  bindLandingMinis('training');
-  $('#btn-new-train').addEventListener('click', () => { location.hash = '#/train-new'; });
+/* ── 弹窗式演示控制台：点击演示任务打开（仅任务名 + 两个按钮，无控制台名 / 无切换标签）── */
+let demoConsoleOpen = false;
+const DEMO_CONSOLES = {
+  range: {
+    title: '电网调度中心红蓝对抗',
+    el: () => $('#rg-hero-sec'),
+    create: () => openTemplateStep({ cat: 'redblue', mode: 'battle' }),
+  },
+  eval: {
+    title: 'GPT-4o 风险点全量评测 · 智能体执行',
+    el: () => $('#el-sec'),
+    create: () => openTemplateStep({ cat: 'eval', objectKind: 'llm', objectId: 'gpt-4o' }),
+  },
+  training: {
+    title: 'PentestGPT-Attack-v3 · 多轮次攻防对抗训练',
+    el: () => $('#tl-sec'),
+    create: () => openTrainTemplateStep(),
+  },
+  rollout: {
+    title: '多域并发 Rollout 数据生产',
+    el: () => $('#ro-sec'),
+    create: () => openTrainTemplateStep(),
+  },
+};
+function openDemoConsole(kind) {
+  const conf = DEMO_CONSOLES[kind];
+  const node = conf && conf.el();
+  if (!node || demoConsoleOpen) return;
+  /* 把演示节点原位移入弹窗（id 不重复，后台 tick 继续驱动同一节点）；关闭时还原 */
+  const marker = document.createComment('dc-slot');
+  node.parentNode.insertBefore(marker, node);
+  demoConsoleOpen = true;
+  modalCloseHook = () => {
+    if (marker.parentNode) marker.parentNode.insertBefore(node, marker);
+    marker.remove();
+    demoConsoleOpen = false;
+  };
+  openModal(`
+    <div class="modal-title serif">${conf.title}<span class="badge badge-gold" style="vertical-align:middle;margin-left:10px">演示任务</span></div>
+    <div class="demo-console-body" id="dc-body"></div>
+    <div class="modal-foot dc-foot">
+      <button class="btn btn-secondary" id="dc-back">返回任务中心</button>
+      <button class="btn btn-primary" id="dc-new">从此模板创建任务</button>
+    </div>`, true);
+  $('#dc-body').appendChild(node);
+  $('#dc-back').addEventListener('click', closeModal);
+  $('#dc-new').addEventListener('click', () => { closeModal(); conf.create(); });
 }
 
 /* ════════════════════════════════════════════════════════════════
- * 任务中心（任务流枢纽，导航不设入口）
- * 任务仪表盘（实时）+ 运行中任务（新任务即见，小窗模拟运行）
- * + 已完成任务列表（任务标签 / 结果标签 / 数据标签 + 三个操作）
+ * 任务中心（首页与任务中心合一：靶场 / 评测 / 训练首页即对应标签的任务中心）
+ * 页面分布：显眼标签页（置顶）→ 任务仪表盘（按标签统计，全部=汇总）
+ * → 运行中任务（演示任务置顶，点击打开弹窗式演示控制台）
+ * → 已完成任务（三标签 + 三操作）→ 风险分析（仅训练任务标签）
  * ════════════════════════════════════════════════════════════════ */
 const TASK_TYPE_CN = { eval: '评测任务', redblue: '靶场攻防任务', agentrisk: '行为风险评测', training: '训练任务' };
 const CONSOLE_CN = { eval: '评测控制台', redblue: '靶场控制台', agentrisk: '评测控制台', training: '训练控制台' };
-/* 任务中心页内子 tab：任务类别 → tab 分组（任务中心不属于测试场，导航不高亮） */
 const TASK_TAB_OF = { redblue: 'range', agentrisk: 'eval', eval: 'eval', training: 'training' };
 const TC_TABS = [
   { id: 'all', label: '全部任务' },
@@ -522,23 +580,26 @@ const TC_TABS = [
   { id: 'eval', label: '评测任务' },
   { id: 'training', label: '训练任务' },
 ];
+/* 每个标签页独立的仪表盘数据（全部任务 = 汇总）与页头文案 */
+const TC_TAB_META = {
+  all: { stats: TASK_STATS, title: '任务中心', desc: '全部任务的统一运行视图 · 汇总数据 · 点击演示任务打开演示控制台' },
+  range: { stats: RANGE_STATS, title: '任务中心 · 靶场任务', desc: '高仿真攻防靶场 · 红蓝对抗与渗透演练任务的统一运行视图' },
+  eval: { stats: EVAL_STATS, title: '任务中心 · 评测任务', desc: '面向大模型与智能体的风险点全量评测 · 报告与错题集自动归集' },
+  training: { stats: TRAIN_STATS, title: '任务中心 · 训练任务', desc: '训练数据产出与训练任务的统一运行视图 · RL 轨迹数据实时回流' },
+};
 let tcFilter = 'all';
 const tcMatch = (category) => tcFilter === 'all' || TASK_TAB_OF[category] === tcFilter;
 function tcTabsHtml() {
   return `
-  <div class="range-tabs" id="tc-tabs">
+  <div class="range-tabs tc-tabs-big" id="tc-tabs">
     ${TC_TABS.map((t) => `<a class="range-tab${tcFilter === t.id ? ' active' : ''}" data-tc-tab="${t.id}">${t.label}</a>`).join('')}
   </div>`;
 }
 function bindTcTabs() {
   $$('#tc-tabs [data-tc-tab]').forEach((a) => a.addEventListener('click', () => {
-    tcFilter = a.dataset.tcTab;
-    $$('#tc-tabs .range-tab').forEach((x) => x.classList.toggle('active', x.dataset.tcTab === tcFilter));
-    renderRunning();
-    renderDoneList();
-    renderRiskAnalysis();
-    const badge = $('#run-count-badge');
-    if (badge) badge.textContent = `${runningVisible() ? 1 : 0} 个`;
+    if (a.dataset.tcTab === tcFilter) return;
+    clearTimers(); /* 整页重渲染前清掉旧 tick，避免计时器叠加 */
+    renderTasks(a.dataset.tcTab);
   }));
 }
 function runningVisible() {
@@ -549,37 +610,65 @@ function consoleHashOf(cfg) {
   return cfg.category === 'redblue' ? '#/range' : cfg.category === 'training' ? '#/training-console' : '#/workbench';
 }
 
-function renderTasks() {
+/* 运行中任务区的演示任务（置顶）：各标签对应各自演示窗，训练 = 双 case 并行 */
+function demoZoneHtml() {
+  if (tcFilter === 'range') return demoLoopHtml() + landingMinisHtml('range');
+  if (tcFilter === 'eval') return evalLoopHtml() + landingMinisHtml('eval');
+  if (tcFilter === 'training') return `<div class="demo-duo">${trainLoopHtml()}${rolloutLoopHtml()}</div>` + landingMinisHtml('training');
+  return `<div class="demo-duo">${demoLoopHtml()}${evalLoopHtml()}</div>
+    <div class="demo-duo" style="margin-top:16px">${trainLoopHtml()}${rolloutLoopHtml()}</div>`;
+}
+function bindDemoZone() {
+  if (tcFilter === 'range') { bindDemoLoop(); bindLandingMinis('range'); }
+  else if (tcFilter === 'eval') { bindEvalLoop(); bindLandingMinis('eval'); }
+  else if (tcFilter === 'training') { bindTrainLoop(); bindRolloutLoop(); bindLandingMinis('training'); }
+  else { bindDemoLoop(); bindEvalLoop(); bindTrainLoop(); bindRolloutLoop(); }
+}
+const DEMO_COUNT = { all: 4, range: 3, eval: 3, training: 4 };
+
+function renderTasks(tab) {
+  tcFilter = tab || 'all';
+  const meta = TC_TAB_META[tcFilter];
   $('#view').innerHTML = `
   <div class="page">
     <div class="page-head-row">
       <div class="page-head-left">
+        ${tcFilter === 'all' ? `
         <a class="btn-back" href="#/range-tasks" title="返回首页（靶场任务）">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5 4.5 8l5.5 5.5"/></svg>
           <span>返回首页</span>
-        </a>
+        </a>` : ''}
         <div>
-          <h2 class="page-title">任务中心</h2>
-          <p class="page-desc">全部任务的统一运行视图 · 点击运行中窗口进入对应任务控制台</p>
+          <h2 class="page-title">${meta.title}</h2>
+          <p class="page-desc">${meta.desc}</p>
         </div>
       </div>
       <button class="btn btn-primary" id="btn-new-task">＋ 新建任务</button>
     </div>
-    <div class="history-head">任务仪表盘<span class="head-badge">实时</span></div>
-    ${statCardsHtml(TASK_STATS)}
     ${tcTabsHtml()}
-    <div class="history-head">运行中任务<span class="head-badge" id="run-count-badge">${runningVisible() ? 1 : 0} 个</span></div>
-    <div id="runwin-wrap" style="margin-bottom:32px"></div>
+    <div class="history-head">任务仪表盘<span class="head-badge">实时 · ${TC_TABS.find((t) => t.id === tcFilter).label}</span></div>
+    ${statCardsHtml(meta.stats, true)}
+    <div class="history-head">运行中任务<span class="head-badge" id="run-count-badge">${runningVisible() ? 1 : 0} 个 · ${DEMO_COUNT[tcFilter]} 个演示</span></div>
+    <div id="demo-zone"></div>
+    <div id="runwin-wrap" style="margin:16px 0 32px"></div>
     <div class="history-head">已完成任务</div>
     <div class="done-list" id="done-list"></div>
     <div id="risk-wrap"></div>
   </div>`;
+  $('#demo-zone').innerHTML = demoZoneHtml();
+  bindDemoZone();
   bindTcTabs();
   renderRunning();
   renderDoneList();
   renderRiskAnalysis();
   every(tickRunning, 1000);
-  $('#btn-new-task').addEventListener('click', () => openMarketplace(null));
+  const newTask = () => {
+    if (tcFilter === 'training') location.hash = '#/train-new';
+    else if (tcFilter === 'range') openMarketplaceCat('redblue');
+    else if (tcFilter === 'eval') openMarketplaceCat('eval');
+    else openMarketplace(null);
+  };
+  $('#btn-new-task').addEventListener('click', newTask);
 }
 
 /* ── 风险分析板块：训练过程产生的风险数据，可批量分析 / 下载 / 管理，一键生成风险报告 ── */
@@ -593,7 +682,7 @@ const RISK_DATA = [
 ];
 const RISK_LEVEL = { high: ['高危', 'badge-destructive'], mid: ['中危', 'badge-gold'], low: ['低危', 'badge-olive'] };
 const riskSelected = new Set();
-function riskVisible() { return tcFilter === 'all' || tcFilter === 'training'; }
+function riskVisible() { return tcFilter === 'training'; }
 function renderRiskAnalysis() {
   const wrap = $('#risk-wrap');
   if (!wrap) return;
