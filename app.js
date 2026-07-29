@@ -2584,6 +2584,7 @@ function renderWorkbench() {
 
   $('#view').innerHTML = `
   <div class="wb">
+    <div style="margin-bottom:16px"><a href="${run.category === 'redblue' ? '#/range-tasks' : '#/eval-tasks'}" class="small" style="color:var(--primary);text-decoration:none">← 返回任务中心</a></div>
     <div class="wb-head">
       <div>
         <div class="wb-title">${esc(run.meta.title)}</div>

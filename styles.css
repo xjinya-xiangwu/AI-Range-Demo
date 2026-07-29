@@ -671,9 +671,10 @@ body {
 .done-stats b { color: var(--foreground); font-weight: 500; font-family: var(--font-mono); }
 
 /* ── 任务中心 · 已完成任务列表（关键信息行）────────────────────── */
-.done-list { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.done-list { display: flex; flex-direction: column; border-top: 1px solid var(--border); overflow-x: auto; }
 .done-row {
   display: grid; grid-template-columns: minmax(200px, 2fr) 84px 84px minmax(150px, 1.1fr) 64px minmax(140px, 1fr) 120px auto;
+  min-width: 1020px;
   align-items: center; gap: 14px; padding: 12px 8px;
   border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s;
 }
