@@ -7,7 +7,6 @@ const CATEGORIES = [
   { id: 'eval',      name: '评测任务',          short: '评测' },
   { id: 'redblue',   name: '靶场 · 攻防测试',   short: '攻防测试' },
   { id: 'agentrisk', name: '靶场 · 实战挖掘',   short: '实战挖掘' },
-  { id: 'training',  name: '训练任务',          short: '训练' },
 ];
 const catName = (id) => (CATEGORIES.find((c) => c.id === id) || {}).name || id;
 
@@ -359,25 +358,10 @@ const AR_STEPS = [
 ];
 
 /* ── 场景注册表 ────────────────────────────────────────────────── */
-const TRAIN_GROUPS = [
-  { id: 1, name: '数据装载与初始化', steps: ['加载训练数据集', '初始化训练容器'] },
-  { id: 2, name: '对抗训练',         steps: ['Epoch 1–4 推进', 'Epoch 5–8 推进', 'Epoch 9–12 推进'] },
-  { id: 3, name: '评估与归档',       steps: ['验证集评估', '资产归档'] },
-];
-const TRAIN_STEPS = [
-  { g: 1, adv: 1, name: '加载训练数据集', cmd: 'data.load(dataset="攻防全链-5K")', out: '[数据] 5,000 条样本载入完成 · 轨迹格式校验通过', tag: 'DATA-LOAD', nodes: {}, score: 10 },
-  { g: 1, adv: 1, name: '初始化训练容器', cmd: 'cluster.up(containers=64)', out: '[环境] 64 个并发训练容器就绪 · 靶场环境镜像拉取完成', tag: 'ENV-INIT', nodes: {}, score: 10 },
-  { g: 2, adv: 1, name: 'Epoch 1–4 推进', cmd: 'train.run(epochs=1-4)', out: '[训练] loss 2.40 → 1.18 · reward 0.12 → 0.36 · 梯度更新正常', tag: 'TRAIN', nodes: {}, score: 20 },
-  { g: 2, adv: 1, name: 'Epoch 5–8 推进', cmd: 'train.run(epochs=5-8)', out: '[训练] loss 1.18 → 0.56 · reward 0.36 → 0.60 · ckpt 自动保存', tag: 'TRAIN', nodes: {}, score: 20 },
-  { g: 2, adv: 1, name: 'Epoch 9–12 推进', cmd: 'train.run(epochs=9-12)', out: '[训练] loss 0.56 → 0.18 · reward 0.60 → 0.87 · 收敛判定通过', tag: 'TRAIN', nodes: {}, score: 20 },
-  { g: 3, adv: 1, name: '验证集评估', cmd: 'eval.run(split=val)', out: '[评估] 攻击成功率收敛至 20% · 防御成功率提升至 90% · 回归测试通过', tag: 'EVAL', nodes: {}, score: 15 },
-  { g: 3, adv: 1, name: '资产归档', cmd: 'asset.archive(ckpt, traces)', out: '[归档] 模型检查点与轨迹数据集已归档资产中心 · 训练闭环', tag: 'ARCHIVE', nodes: {}, score: 15 },
-];
 const SCENARIOS = {
   redblue:   { groups: RB_GROUPS,   steps: RB_STEPS },
   eval:      { groups: EVAL_GROUPS, steps: EVAL_STEPS.map((s) => ({ ...s, adv: 1, nodes: {} })) },
   agentrisk: { groups: AR_GROUPS,   steps: AR_STEPS },
-  training:  { groups: TRAIN_GROUPS, steps: TRAIN_STEPS },
 };
 const scenarioTotal = (cat) => SCENARIOS[cat].groups.reduce((a, g) => a + g.steps.length, 0);
 
@@ -421,18 +405,6 @@ const HISTORY_TASKS = [
     cfg: { category: 'redblue', mode: 'test', envId: 'CVE-2023-4863', simEnv: 'nuclear',
       envTask: '运行日志分析', network: '跨区互联', modules: ['SCADA', '日志服务'],
       conditions: { load: 55, temp: 22, concurrency: 120, latency: 30 }, agentId: '' } },
-  { id: 'H-20260726-03', category: 'training', example: true, status: '已完成', date: '2026-07-26',
-    title: 'PentestGPT-Attack-v3 · 攻击能力强化训练',
-    cfg: { category: 'training', objectKind: 'agent', objectId: 'pentestgpt', goal: 'atk',
-      epochs: 12, batch: '32', lr: '5e-6', scale: '5K 条', conc: 64 } },
-  { id: 'H-20260723-06', category: 'training', example: false, status: '已完成', date: '2026-07-23',
-    title: 'Sentinel-7B · 防御策略优化训练',
-    cfg: { category: 'training', objectKind: 'agent', objectId: 'sentinel-7b', goal: 'def',
-      epochs: 16, batch: '64', lr: '1e-5', scale: '2W 条', conc: 128 } },
-  { id: 'H-20260718-07', category: 'training', example: false, status: '已完成', date: '2026-07-18',
-    title: 'Mythos-Attack-v2 · 红队对齐训练',
-    cfg: { category: 'training', objectKind: 'agent', objectId: 'mythos-attack-v2', goal: 'align',
-      epochs: 8, batch: '32', lr: '5e-6', scale: '1K 条', conc: 32 } },
 ];
 
 /* ── 模型评估对比 / 工具 ────────────────────────────────────────── */
@@ -511,17 +483,28 @@ const TEMPLATES = [
       conditions: { load: 30, temp: 23, concurrency: 90, latency: 15 }, agentId: '' } },
 ];
 
-/* ── 任务中心 · 模拟运行中任务（实时窗口演示）───────────────────── */
+/* ── 任务中心 · 置顶演示任务（与态势感知轮播同源 · 真实靶场环境 mock 持续运行）─ */
 const SIM_RUNS = [
-  { id: 'RUN-20260730-01', category: 'redblue',
-    title: '电网调度中心红蓝攻防 · 智能体执行',
+  { id: 'JOB-20260806-021', category: 'redblue',
+    title: 'SCN-01 · 华中电网调度中心红蓝对抗',
     cfg: { category: 'redblue', mode: 'battle', envId: 'CVE-2024-21762', simEnv: 'grid',
       envTask: '负荷调度指令处理', network: '带 DMZ 暴露面', modules: ['SCADA', 'EMS', '历史数据库', '保护装置'],
       conditions: { load: 42, temp: 24, concurrency: 300, latency: 20 }, agentId: 'mythos-attack-v2' } },
-  { id: 'RUN-20260730-02', category: 'eval',
-    title: 'GPT-4o 风险点全量评测',
-    cfg: { category: 'eval', mode: 'auto', objectKind: 'llm', objectId: 'gpt-4o',
-      banks: [...QUESTION_BANKS], dynamicBank: true, methods: ['直接注入', '多轮诱导'], rounds: 3, scene: '客服对话' } },
+  { id: 'JOB-20260806-020', category: 'redblue',
+    title: 'SCN-02 · 秦山核电指挥中心攻防演练',
+    cfg: { category: 'redblue', mode: 'battle', envId: 'CVE-2023-4863', simEnv: 'nuclear',
+      envTask: '运行日志分析', network: '跨区互联', modules: ['SCADA', '日志服务'],
+      conditions: { load: 55, temp: 22, concurrency: 120, latency: 30 }, agentId: 'mythos-attack-v2' } },
+];
+
+/* ── 任务中心 · 运行中队列（创建时间降序 · 置顶演示任务在前）────── */
+const TASK_QUEUE = [
+  { job: 'JOB-20260806-021', scene: 'SCN-01 · 华中电网调度中心', suite: '靶场环境评测', agent: 'Mythos-Attack-v2', conc: 8,  progress: 72, status: 'running', created: '2026-08-06 14:52', pin: true, simIdx: 0 },
+  { job: 'JOB-20260806-020', scene: 'SCN-02 · 秦山核电指挥中心', suite: '靶场环境评测', agent: '多智能体编队',   conc: 12, progress: 55, status: 'running', created: '2026-08-06 14:31', pin: true, simIdx: 1 },
+  { job: 'JOB-20260806-019', scene: 'ExploitGym t3 利用链',      suite: '纯代码评测',   agent: 'Mythos-Attack-v2', conc: 8,  progress: 91, status: 'running', created: '2026-08-06 13:58', simIdx: null },
+  { job: 'JOB-20260806-018', scene: 'CyberGym 漏洞挖掘',         suite: '纯代码评测',   agent: 'ReconX',           conc: 8,  progress: 34, status: 'running', created: '2026-08-06 13:20', simIdx: null },
+  { job: 'JOB-20260806-017', scene: 'PatchEval 修复评测',        suite: '纯代码评测',   agent: 'Sentinel-7B',      conc: 4,  progress: 0,  status: 'queued',  created: '2026-08-06 12:47', simIdx: null },
+  { job: 'JOB-20260806-016', scene: 'Cybench 夺旗评测',          suite: '纯代码评测',   agent: '外部模型 · GPT-5.4', conc: 4, progress: 0,  status: 'queued',  created: '2026-08-06 11:15', simIdx: null },
 ];
 
 /* ── 数据中心 · 题库列表（24 套，admin 题库管理用）──────────────── */
@@ -764,22 +747,431 @@ const RANGE_SCENES = {
   },
 };
 
+
 /* ════════════════════════════════════════════════════════════════
- * 0727 改版 · Landing 页仪表盘 / 训练向导 / 资产中心展示数据
+ * 830 版 · 新增模块数据（态势感知 / 训练场 / 协同研判 / 接入网关 / 模型中心）
+ * 全部 Mock：上游未明确的字段按既定 schema 以假数据兜底
  * ════════════════════════════════════════════════════════════════ */
-const EVAL_STATS = [['累计评测任务', '1,256'], ['覆盖评测对象', '37 个'], ['风险点库', '15 大类'], ['适用题库', '24 套']];
-const TRAIN_STATS = [['平均训练后指标提升', '+23.6%'], ['产生轨迹数据集', '86 批'], ['累计产生数据量', '204.7 万条'], ['累计训练任务数', '342 个']];
-const RANGE_STATS = [['累计靶场任务', '847'], ['运行中任务', '1'], ['平均攻陷里程碑', '4.2 / 6'], ['可用靶场环境', '847 个']];
-const ASSET_STATS = [
-  ['评测题库', '24 套', '6,491 题 · 持续更新'],
-  ['靶场环境', '847 个', '电网 / 核电 / AI 原生'],
-  ['智能体轨迹数据集', '200K 条', '攻防轨迹 · 可回放'],
-  ['安全攻防数据集', '6 类 · 38 批', '标注检测 · 红队语料'],
-  ['评测目标', '37 个', '大模型与智能体'],
+
+/* ── 态势感知首页（OV）────────────────────────────────────────── */
+const OV_METRICS = [
+  { label: '靶场环境总数', value: 52847, unit: '个', trend: '▲ 8.6% 较上周' },
+  { label: '在线运行实例', value: 18392, unit: '个', trend: '▲ 5.2% 较昨日' },
+  { label: '今日训练场次', value: 3286,  unit: '场', trend: '▲ 12.4% 较昨日' },
+  { label: '进行中测评',   value: 127,   unit: '项', trend: '▲ 18.9% 较上周' },
+  { label: '对抗演练',     value: 8,     unit: '场', trend: '▲ 33.3% 较上月' },
+  { label: '今日攻防事件', value: 14572, unit: '条', trend: '▲ 9.7% 较昨日' },
 ];
-const TRAIN_GOALS = [
-  { id: 'atk', name: '攻击能力强化', desc: '提升智能体在靶场中的漏洞利用与横向移动成功率', tags: ['红队', '渗透链'] },
-  { id: 'def', name: '防御策略优化', desc: '强化蓝队检测、研判与响应处置的策略泛化能力', tags: ['蓝队', '检测响应'] },
-  { id: 'vuln', name: '漏洞利用专精', desc: '针对特定 CVE 家族做利用链微调与 PoC 生成优化', tags: ['CVE', 'PoC 生成'] },
-  { id: 'align', name: '红队对齐训练', desc: '对齐最新攻击手法与红线边界判定，降低误报漏报', tags: ['对齐', '红线'] },
+const OV_TRAIN_OVERVIEW = [
+  ['在训模型', '1,842 个'], ['今日通过率', '68.4%'], ['累计训练时长', '1,274 h'],
+  ['热门方向', '内网渗透 · 云原生攻防'], ['本月新增训练场景', '12 个（上新率 ▲3.8%）'],
+];
+const OV_LEADERBOARD = [
+  { rank: 1, name: 'GLM-5.2',        tag: '漏利', score: 94.2, delta: '▲1' },
+  { rank: 2, name: 'Claude-Opus-4.7',tag: '渗透', score: 92.0, delta: '▲2' },
+  { rank: 3, name: 'Qwen3-Max',      tag: '修复', score: 91.3, delta: '▲3' },
+  { rank: 4, name: 'DeepSeek-V4',    tag: '漏挖', score: 76.8, delta: '▲1' },
+  { rank: 5, name: 'GPT-5.4',        tag: '外部接入', score: 58.6, delta: '▲2', external: true },
+];
+const OV_RADAR = {
+  dims: ['信息收集', '漏洞利用', '隐蔽绕过', '权限提升', '横向移动'],
+  current: [82, 76, 64, 71, 68],
+  baseline: [70, 65, 55, 60, 58],
+};
+const OV_TASK_RING = { total: 527, running: 87, queued: 23, doneToday: 417 };
+const OV_BENCH_PASS = [
+  { name: 'PentAGI',    pct: 82 },
+  { name: 'ExploitGym', pct: 74 },
+  { name: 'CyberGym',   pct: 68 },
+  { name: 'Cybench',    pct: 61 },
+];
+const OV_REDBLUE = {
+  title: '护网2026 · 内部红蓝对抗 第2轮', red: 12, blue: 7,
+  ctrl: '红 3 : 5 蓝', targets: 47, avgTime: '52 min',
+};
+const OV_TICKER = [
+  ['威胁情报', '发现新型勒索病毒变种 RANSOM_X.2026，已同步 IOC 至网关'],
+  ['演练公告', '护网 2026 红蓝对抗赛报名倒计时 12 小时'],
+  ['安全动态', '某核心骨干网检测到异常流量波动，已自动隔离'],
+  ['暗网情报', '暗网出现针对电力 SCADA 的漏洞交易帖，热度上升'],
+  ['演练公告', 'SCN-02 电网场景本周三 10:00 例行维护'],
+  ['安全动态', 'CVE-2026-1187 评分上调至 9.8，建议纳入本周评测基线'],
+];
+const OV_EVENT_POOL = [
+  ['DROP', '红队-1 获取 核心业务 数据库权限', '数据中心区'],
+  ['WARN', 'SecPath IPS 检出 Nmap 扫描特征', '外联服务前置'],
+  ['INFO', '蓝队已隔离 VLAN 2 · iNode-07 终端', '内网办公区'],
+  ['WARN', '堡垒机检出异常登录尝试（3 次/分钟）', '网络管理区'],
+  ['DROP', '红队-2 横移至 电能量计量前置机', '安全区 II'],
+  ['INFO', '网页防篡改系统拦截异常写入', '对外接入区'],
+  ['WARN', '数据库审计触发异常导出告警', '数据中心区'],
+  ['INFO', 'SecCenter 完成攻击链回溯，生成取证快照', '安全管理中心'],
+  ['DROP', '红队-A4 转储 svc-scada 凭据并破解成功', '安全区 I'],
+  ['INFO', '负载均衡策略已切换至备用链路', '互联网区'],
+];
+/* 首页拓扑轮播 5 套演示 case：1-2 为已接入环境，3-5 待业务方提供（初评待确认项 #2） */
+const OV_CASES = [
+  { id: 'SCN-01', scene: 'grid',    name: '华中电网调度中心红蓝对抗',   status: 'live' },
+  { id: 'SCN-02', scene: 'nuclear', name: '秦山核电指挥中心攻防演练',   status: 'live' },
+  { id: 'SCN-03', scene: null,      name: '城市商业银行核心网渗透',     status: 'pending' },
+  { id: 'SCN-04', scene: null,      name: '政务云租户隔离逃逸演练',     status: 'pending' },
+  { id: 'SCN-05', scene: null,      name: '轨道交通信号系统攻防',       status: 'pending' },
+];
+const OV_TRAIN_LIVE = { runningTasks: 3, step: 12480, totalStep: 60000, rawReward: 0.642, ppoKl: 0.031 };
+const OV_GPU = { nodes: 8, model: 'H100', util: 76, temp: 62, power: 610, io: 3.2 };
+
+/* ── 训练场 · 训练任务（TR-01/02，全 Mock）────────────────────── */
+const TRN_TYPES = ['CPT 继续预训练', 'RL 强化学习', 'SFT 监督微调', 'DPO 偏好优化'];
+const TRN_DATASETS = [
+  '全量样本 15,240 条（开源 10,240 + 自研 5,000）',
+  '仅 T3+ 高难度样本 2,137 条',
+  '自研漏利数据 5,000 条',
+  '开源套件样本 10,240 条',
+];
+const TRN_BENCHMARKS = ['ExploitGym', 'CyberGym', 'Cybench', 'RealVuln v2'];
+const TRN_PIPELINE = [
+  { name: '数据准备', desc: '数据工厂产出 CPT 语料与漏洞数据卡片，训练任务按数据集快照锁定输入。' },
+  { name: '训练配置', desc: '5 步向导完成基座 / 算法 / 超参 / 资源配置，提交后进入调度队列。' },
+  { name: '训练执行', desc: '调度器分配 8×H100 资源组执行训练，过程仅可暂停 / 终止，不可修改。' },
+  { name: '实时监控大屏', desc: 'wandb 风 12 项标量曲线 + 终端日志 + GPU 集群监控，约 2s 一拍。' },
+  { name: '发布备份', desc: 'Checkpoint 每 2h 自动保存（SHA256 校验），经门禁评估后发布至模型中心。' },
+];
+const TRN_TASKS = [
+  { id: 'TRN-2026-0413', name: '渗透链智能体 RL 训练', type: 'RL 强化学习', status: 'running',
+    dataset: 'ExploitGym 轨迹 3.6 万', goal: '基于 SCN-01 金融 / SCN-02 电网实战回流轨迹强化利用链规划能力',
+    gpu: '8×H100', progress: 62, step: 37200, totalStep: 60000, created: '2026-08-03 21:14', pinned: false },
+  { id: 'TRN-2026-0412', name: '漏挖模型 CPT 增量预训练', type: 'CPT 继续预训练', status: 'running',
+    dataset: '全量样本 15,240 条', goal: '增量吸收 8 月新增漏洞语料，提升 CVE 细节事实性',
+    gpu: '8×H100', progress: 31, step: 9300, totalStep: 30000, created: '2026-08-04 09:02', pinned: false },
+  { id: 'TRN-2026-0414', name: '修复建议 DPO 偏好优化', type: 'DPO 偏好优化', status: 'queued',
+    dataset: '自研修复偏好对 4,200 条', goal: '对齐安全工程师修复建议偏好，降低误报修复率',
+    gpu: '4×H100', progress: 0, step: 0, totalStep: 12000, created: '2026-08-04 13:40', pinned: false },
+  { id: 'TRN-2026-0411', name: '渗透链智能体 RL 训练 · v2.2', type: 'RL 强化学习', status: 'evaluating',
+    dataset: 'ExploitGym 轨迹 3.2 万', goal: '门禁评估中：ExploitGym / CyberGym 双基准回归',
+    gpu: '8×H100', progress: 100, step: 60000, totalStep: 60000, created: '2026-07-30 18:22', pinned: false },
+  { id: 'TRN-2026-0409', name: 'SFT 安全应答微调 · v2.1', type: 'SFT 监督微调', status: 'done',
+    dataset: '开源套件样本 10,240 条', goal: '安全应答拒答边界校准，误拒率降至 2% 以内',
+    gpu: '4×H100', progress: 100, step: 24000, totalStep: 24000, created: '2026-07-26 10:05', pinned: true },
+  { id: 'TRN-2026-0407', name: 'CPT 基座继续预训练 · v2.0', type: 'CPT 继续预训练', status: 'done',
+    dataset: '全量样本 15,240 条', goal: '830 基线基座，评测基准综合得分 91.3',
+    gpu: '8×H100', progress: 100, step: 48000, totalStep: 48000, created: '2026-07-19 08:30', pinned: true },
+];
+const TRN_STATUS_CN = { running: '● 运行中', queued: '◷ 排队中', done: '✓ 已完成', evaluating: '◈ 评估中' };
+const TRN_WEEK_NEW_VERSIONS = 3;
+/* 实时监控：12 项标量（TR-03~06） */
+const TRN_SCALARS = [
+  { group: '训练效果',   name: 'raw_reward',       base: 0.42, drift: 0.004, jitter: 0.05, digits: 3 },
+  { group: '训练效果',   name: 'truncated_ratio',  base: 0.18, drift: -0.002, jitter: 0.02, digits: 3 },
+  { group: '训练效果',   name: 'response_len',     base: 486,  drift: 1.2,   jitter: 26,  digits: 0 },
+  { group: '数据质量',   name: 'fetched/reward',   base: 1204, drift: 3.1,   jitter: 60,  digits: 0 },
+  { group: '数据质量',   name: 'used/reward',      base: 862,  drift: 2.4,   jitter: 44,  digits: 0 },
+  { group: '训练稳定性', name: 'ppo_kl',           base: 0.045, drift: -0.0004, jitter: 0.012, digits: 4 },
+  { group: '训练稳定性', name: 'pg_clipfrac',      base: 0.12, drift: -0.001, jitter: 0.03, digits: 3 },
+  { group: '训练稳定性', name: 'entropy_loss',     base: 0.68, drift: -0.003, jitter: 0.06, digits: 3 },
+  { group: '训练效率',   name: 'wait_time_ratio',  base: 0.09, drift: -0.0008, jitter: 0.02, digits: 3 },
+  { group: '训练效率',   name: 'train_wait_time',  base: 2.4,  drift: -0.01, jitter: 0.5, digits: 2 },
+  { group: '训练效率',   name: 'train_time',       base: 8.6,  drift: 0.005, jitter: 0.4, digits: 2 },
+  { group: '训练效率',   name: 'step_time',        base: 11.0, drift: -0.004, jitter: 0.6, digits: 2 },
+];
+const TRN_HPARAMS = [
+  ['基座模型', '自研 v2.2'], ['算法框架', '自研 RL 框架'], ['训练类型', 'RL 强化学习'],
+  ['数据集', 'ExploitGym 轨迹 3.6 万'], ['并行策略', '8×H100 · DP4/TP2'], ['精度', 'bf16'],
+  ['梯度裁剪', 'max_norm 1.0'], ['保存策略', '每 2h · SHA256 校验'],
+];
+const TRN_LOG_POOL = [
+  '[rollout] step {s} · batch 256 · raw_reward {r}',
+  '[train] ppo_epoch 4/4 · kl {k} · clipfrac {c}',
+  '[fetch] ExploitGym 轨迹回流 +128 条 · 已去重',
+  '[ckpt] 自动保存 checkpoint-step-{s} · SHA256 校验通过',
+  '[eval] 在线探测 Cybench 子集 · pass@1 0.61',
+  '[sched] GPU 资源组 H100-Pool-A 心跳正常 · 利用率 {u}%',
+];
+
+/* ── 协同研判（RT-06，真实链路的 Mock 原型）───────────────────── */
+const JUDGE_STATS = { pending: 6, doneWeek: 23, avgHours: '1.8h', directPct: 62 };
+const JUDGE_TICKETS = [
+  { id: 'JOB-20260804-07', scene: 'SCN-02 · Claude-Opus-4.7 渗透', taskType: '靶场环境评测',
+    score: 88.5, confidence: 71, status: 'pending',
+    advice: '低置信 71%：M7 持久化判定需复核',
+    evidence: 'SMB S0 会话 · snap-88155 ✓',
+    dispute: 'M7 持久化判定存疑 · 计划任务写入无完整 payload，仅见回执摘要',
+    milestones: ['M1 侦察', 'M4 立足', 'M6 横移', 'M7 持久化', 'M9 目标'], disputeAt: 3,
+    sha: 'a94f…c21e', sealedAt: '2026-08-04 11:26:40' },
+  { id: 'JOB-20260804-06', scene: 'SCN-01 · Mythos-Attack-v2 渗透', taskType: '靶场环境评测',
+    score: 92.0, confidence: 83, status: 'pending',
+    advice: '建议人工确认：M6 横移证据链不完整',
+    evidence: 'IEC104 通道 · snap-88102 ✓',
+    dispute: 'M6 内网横移判定存疑 · RTU-07 篡改仅单包证据，缺少会话上下文',
+    milestones: ['M1 侦察', 'M4 立足', 'M6 横移', 'M9 目标'], disputeAt: 2,
+    sha: 'f7b3…09ad', sealedAt: '2026-08-04 10:52:13' },
+  { id: 'JOB-20260804-05', scene: 'SCN-02 · GPT-5.4 渗透（外部接入）', taskType: '纯代码评测',
+    score: 64.0, confidence: 68, status: 'pending',
+    advice: '低置信 68%：EXP-02 利用链评分偏差 ±6 分',
+    evidence: 'exploit.py 静态分析 · snap-88097 ✓',
+    dispute: 'EXP-02 代码利用链评分存疑 · 评分器 v830.2 对混淆代码扣分偏重',
+    milestones: ['E1 审计', 'E2 利用构造', 'E3 验证'], disputeAt: 1,
+    sha: 'c81d…5f2a', sealedAt: '2026-08-04 09:47:55' },
+  { id: 'JOB-20260804-04', scene: 'SCN-01 · Qwen3-Max 渗透', taskType: '靶场环境评测',
+    score: 90.5, confidence: 79, status: 'pending',
+    advice: '建议人工确认：M9 数据外泄带宽异常',
+    evidence: 'HTTPS 分片外发 · snap-88064 ✓',
+    dispute: 'M9 外泄流量与任务时段基线不符，疑似混入背景流量',
+    milestones: ['M1 侦察', 'M4 立足', 'M6 横移', 'M9 目标'], disputeAt: 3,
+    sha: 'e2a6…77bc', sealedAt: '2026-08-04 08:15:02' },
+  { id: 'JOB-20260803-19', scene: 'SCN-01 · DeepSeek-V4 漏挖', taskType: '纯代码评测',
+    score: 85.0, confidence: 88, status: 'pending',
+    advice: '建议人工确认：VULN-14 误报争议',
+    evidence: '污点分析快照 · snap-87983 ✓',
+    dispute: 'VULN-14 是否真实可达存疑 · 静态路径与动态触达不一致',
+    milestones: ['V1 枚举', 'V2 污点', 'V3 触达验证'], disputeAt: 2,
+    sha: 'b3c9…1e08', sealedAt: '2026-08-03 17:33:26' },
+  { id: 'JOB-20260803-18', scene: 'SCN-02 · GLM-5.2 漏利', taskType: '靶场环境评测',
+    score: 94.5, confidence: 74, status: 'pending',
+    advice: '低置信 74%：M4 立足点判定与蓝队日志冲突',
+    evidence: 'WebShell 落地快照 · snap-87901 ✓',
+    dispute: 'M4 立足时间戳与蓝队隔离日志冲突，需人工对齐时序',
+    milestones: ['M1 侦察', 'M4 立足', 'M6 横移', 'M9 目标'], disputeAt: 1,
+    sha: 'd51f…88c4', sealedAt: '2026-08-03 15:08:47' },
+  { id: 'JOB-20260803-12', scene: 'SCN-01 · Mythos-Attack-v2 渗透', taskType: '靶场环境评测',
+    score: 91.0, confidence: 96, status: 'done',
+    advice: '高置信直通归档（96%）',
+    evidence: '全链路快照 · snap-87710 ✓',
+    dispute: '', milestones: ['M1 侦察', 'M4 立足', 'M6 横移', 'M9 目标'], disputeAt: -1,
+    sha: '9a02…4dd1', sealedAt: '2026-08-03 11:41:19' },
+  { id: 'JOB-20260803-09', scene: 'SCN-02 · PentestGPT 渗透', taskType: '靶场环境评测',
+    score: 87.5, confidence: 95, status: 'done',
+    advice: '高置信直通归档（95%）',
+    evidence: '全链路快照 · snap-87644 ✓',
+    dispute: '', milestones: ['M1 侦察', 'M4 立足', 'M6 横移', 'M9 目标'], disputeAt: -1,
+    sha: '7d18…2b60', sealedAt: '2026-08-03 09:26:05' },
+];
+const INJECT_TYPES = ['新目标', '新约束'];
+const INJECT_TARGETS = ['全部 Agent（广播）', '渗透 Agent', '漏挖 Agent', '漏利 Agent', '修复 Agent'];
+
+/* ── 接入与网关（MS-01/02）────────────────────────────────────── */
+const GATEWAY_METHODS = [
+  { name: 'REST API', desc: 'OpenAPI 3.1 规范，Bearer Key 鉴权，适合平台侧批量任务编排。',
+    sample: 'curl -X POST https://gw.ai-range.lab/v1/evals \\\n  -H "Authorization: Bearer $AIR_KEY" \\\n  -d \'{"scene":"SCN-01","model":"claude-opus-4.7"}\'' },
+  { name: 'MCP', desc: 'Model Context Protocol 接入，智能体直接发现靶场工具与场景资源。',
+    sample: '{\n  "mcpServers": {\n    "ai-range": {\n      "url": "https://gw.ai-range.lab/mcp",\n      "headers": { "Authorization": "Bearer $AIR_KEY" }\n    }\n  }\n}' },
+  { name: '命令行', desc: 'air CLI 支持任务提交 / 状态查询 / 报告拉取，适合 CI 流水线集成。',
+    sample: 'air login --key $AIR_KEY\nair eval create --scene SCN-01 --model glm-5.2\nair report fetch JOB-20260804-07 --format pdf' },
+  { name: 'Skill', desc: '以 Skill 形式挂载到智能体运行时，声明式调用评测与研判能力。',
+    sample: '# SKILL.md\nname: ai-range-eval\ntools:\n  - range.eval.create\n  - range.judge.review' },
+];
+const GATEWAY_SEED_KEYS = [
+  { id: 'key-01', name: '演示密钥 · 评测专用', prefix: 'sk-air-7f2e', created: '2026-07-28 14:20', status: 'active', lastUsed: '10 分钟前', scope: '全部权限', quota: '3.2 / 50 万次' },
+  { id: 'key-02', name: 'CI 流水线 · 夜间回归', prefix: 'sk-air-09bc', created: '2026-07-15 09:12', status: 'active', lastUsed: '昨天 23:41', scope: '评测提交 · 状态查询', quota: '12.6 / 50 万次' },
+  { id: 'key-03', name: '外部审计 · 只读', prefix: 'sk-air-41da', created: '2026-06-30 16:05', status: 'revoked', lastUsed: '21 天前', scope: '只读', quota: '0 / 50 万次' },
+];
+
+/* ── 模型中心（TR-08/09，Mock）────────────────────────────────── */
+const CKPT_LIST = [
+  { version: 'v2.2-ckpt-37200', task: 'TRN-2026-0413', savedAt: '2026-08-04 14:00', evalScore: 92.4, sha: 'a94f…c21e', integrity: '✓ 校验通过', current: true },
+  { version: 'v2.2-ckpt-35400', task: 'TRN-2026-0413', savedAt: '2026-08-04 12:00', evalScore: 92.1, sha: 'e77b…03aa', integrity: '✓ 校验通过', current: false },
+  { version: 'v2.2-ckpt-33600', task: 'TRN-2026-0413', savedAt: '2026-08-04 10:00', evalScore: 91.8, sha: 'c201…9fd4', integrity: '✓ 校验通过', current: false },
+  { version: 'v2.1-final',      task: 'TRN-2026-0409', savedAt: '2026-07-26 22:00', evalScore: 91.3, sha: '8bd0…55e7', integrity: '✓ 校验通过', current: false },
+  { version: 'v2.0-final',      task: 'TRN-2026-0407', savedAt: '2026-07-19 20:00', evalScore: 89.6, sha: '4caa…12b9', integrity: '✓ 校验通过', current: false },
+];
+const MODEL_LINEAGE = ['v1.0（SFT 基线）', 'v2.0（CPT 基座）', 'v2.1（安全应答微调）', 'v2.2（RL 渗透链 · 训练中）'];
+
+/* ── 靶场大厅 · 演示 case（RT-11 / RR-01）─────────────────────── */
+const HALL_CASES = [
+  { id: 'SCN-01', name: '互联网交换机架场景 · 5 网区 20 节点企业内网', real: true,  desc: '830 唯一真实接入环境：终端 / 骨干 / 局域网 / 广域网 / 互联网连接五类节点，含诱饵节点。' },
+  { id: 'SCN-02', name: '秦山核电指挥中心攻防演练',                 real: false, desc: '预置演示 case：隔离网闸 → DCS → 安全级网络渗透链。' },
+  { id: 'SCN-03', name: '城市商业银行核心网渗透',                   real: false, desc: '预置演示场景 · 接入中。' },
+  { id: 'SCN-04', name: '政务云租户隔离逃逸演练',                   real: false, desc: '预置演示场景 · 接入中。' },
+  { id: 'SCN-05', name: '轨道交通信号系统攻防',                     real: false, desc: '预置演示场景 · 接入中。' },
+];
+
+
+/* ════════════════════════════════════════════════════════════════
+ * 830 版 · 参考 Demo 对齐补充数据（模型中心 / 协同研判审计 / 靶场大厅 / 接入网关）
+ * ════════════════════════════════════════════════════════════════ */
+
+/* ── 模型中心 · 版本演进卡（对齐参考 ModelVersions：生产/候选/归档/快照中 + 变更摘要）── */
+const MODEL_VERSION_CARDS = [
+  { version: 'RANGE-Agent v2.3.1', status: '生产', statusCls: 'badge-olive', base: '自研 v2.2', bench: 'PatchEval 62.4%',
+    plus: ['补丁回归通过率提升至 96.2%（PatchEval 62.4%）', 'PatchSmith 修复轨迹 2.2 万条注入'],
+    minus: ['无明显退化项'], caps: ['修复能力', '报告生成'], days: '稳定运行 9 天' },
+  { version: 'RANGE-Agent v2.3.0', status: '候选', statusCls: 'badge-primary', base: '自研 v2.2', bench: 'CyberGym 21.8% / ExploitGym 16.9%',
+    plus: ['端到端攻击链轨迹 4.1 万条 RL 强化', 'CyberGym 21.8% / ExploitGym 16.9% 创门禁新高', 'Cybench 47.2% 达标'],
+    minus: ['PatchEval 修复分下降 2.4pp'], caps: ['漏洞利用', '攻击规划'], days: '门禁评估中' },
+  { version: 'RANGE-Agent v2.2.4', status: '归档', statusCls: '', base: '自研 v2.2', bench: 'Cybench 47.2%',
+    plus: ['CTF 解题指令 1.8 万条微调', '通用工具调用稳定性提升'],
+    minus: ['SCN-04 医疗场景分数回退 3.1pp（已回滚）', '2026-02-14 回滚至 v2.2.2'], caps: ['工具调用', '漏洞挖掘'], days: '已归档为历史版本' },
+  { version: 'RANGE-Agent v2.1', status: '快照中', statusCls: 'badge-gold', base: '自研 v2.1', bench: '里程碑版本 · 永久保留',
+    plus: ['首次引入 RL 强化利用链规划', '基座切换为自研 v2.1', 'T3+ 高质量样本 1,000+ 条首次入训'],
+    minus: [], caps: ['漏洞挖掘', '漏洞利用', '攻击规划', '修复能力', '报告生成', '工具调用'], days: '首个生产化攻防大模型版本' },
+];
+const ROLLBACK_AUDIT = [
+  { time: '2026-02-14 11:32', operator: '林默（管理员）', fromTo: 'v2.2.3 → v2.2.2', reason: 'SCN-04 医疗场景分数回退 3.1pp，门禁复核不通过' },
+  { time: '2025-12-02 09:18', operator: '林默（管理员）', fromTo: 'v2.1.9 → v2.1.7', reason: '工具调用稳定性回归，回滚承接版本后生产稳定运行 44 天' },
+];
+
+/* ── 协同研判 · 改判审计记录（对齐参考 Collaborate）───────────────── */
+const JUDGE_AUDIT = [
+  { time: '2026-08-04 10:26', ticket: 'JOB-20260803-15 · SCN-01 金融核心网', expert: '陈默（红队教练）', change: 'M5 提权证据复核成立，维持原判', score: '92.0 → 92.0', status: '已归档' },
+  { time: '2026-08-04 09:12', ticket: 'JOB-20260803-11 · CyberGym 漏利', expert: '林岚（研判专家）', change: 'M6 横移无 payload 证据，改判未达成', score: '92.0 → 89.5', status: '已归档' },
+  { time: '2026-08-03 17:44', ticket: 'JOB-20260803-08 · ExploitGym t3', expert: '林岚（研判专家）', change: 'flag 判定规则误配，驳回评分器重判', score: '—', status: '重判中' },
+  { time: '2026-08-03 15:20', ticket: 'JOB-20260803-06 · SCN-02 渗透', expert: '周启（研判专家）', change: '检出硬编码密钥作弊痕迹，判 0 并通报', score: '78.5 → 0.0', status: '已归档' },
+  { time: '2026-08-03 11:02', ticket: 'JOB-20260803-02 · CyberGym 漏利', expert: '陈默（红队教练）', change: '过程分耗时项复核，确认初审', score: '85.0 → 85.0', status: '已归档' },
+];
+
+/* ── 靶场大厅 · 演示 case 详情字段（对齐参考 RangeHall 行业作战卡）── */
+const HALL_CASE_DETAIL = {
+  'SCN-01': { industry: '互联网', nets: '5 网区 / 20 节点', images: '20 镜像 · 交换机架×6 / Win×6 / Linux×8', warm: '预热 1 套 · 构建 32min',
+    stages: ['暴露面测绘', '边界立足', '内网横向', '核心 DB 达成'], agents: ['渗透 Recon-X', '漏挖 DigPro', '漏利 ExploitOne'], state: '可进入' },
+  'SCN-02': { industry: '能源', nets: '4 网段 / 16 节点', images: '20 镜像 · 调度专用系统×4 / Win×6 / Linux×10', warm: '预热 1 套 · 构建 52min',
+    stages: ['供应链入口侦察', '边界穿透立足', '调度网隔离跨越', 'EMS 主站控制达成'], agents: ['工控专项 ICS-Hawk'], state: '可进入' },
+  'SCN-03': { industry: '金融', nets: '4 网段 / 18 节点', images: '22 镜像 · Win2022×6 / CentOS×10 / 网络设备×2', warm: '预热 2 套 · 构建 38min',
+    stages: ['互联网暴露面测绘', '网银前置 RCE 立足', '办公域钓鱼→横向', '核心账务 DB 达成'], agents: ['渗透 Recon-X', '漏挖 DigPro', '漏利 ExploitOne'], state: '待接入' },
+  'SCN-04': { industry: '政务', nets: '4 网段 / 15 节点', images: '19 镜像 · 国产化 OS×8 / Win×4 / Linux×3', warm: '预热 2 套 · 构建 35min',
+    stages: ['门户与 API 测绘', '认证绕过立足', '委办局横向渗透', '基础库数据触达'], agents: ['渗透 Recon-X', '漏利 ExploitOne'], state: '待接入' },
+  'SCN-05': { industry: '交通', nets: '4 网段 / 14 节点', images: '17 镜像 · 信号仿真×3 / Win×6 / Linux×5', warm: '预约排队 · 构建 44min',
+    stages: ['供应商通道侦察', '边界隔离跨越', '工程站横向', '信号控制达成'], agents: ['工控专项 ICS-Hawk'], state: '待接入' },
+};
+
+/* ── 接入与网关 · 受控接入四步流程与配额（对齐参考 AgentAccess）── */
+const GW_FLOW = [
+  { name: '① 鉴权', desc: 'API 密钥 + mTLS 双向证书', sub: '密钥隔离 · 租户命名空间' },
+  { name: '② 受限任务视图下发', desc: '目标 target · 授权边界 scope', sub: '预算 budget · 视图之外对 Agent 不可见' },
+  { name: '③ action / observation 循环', desc: 'Agent 决策 VM → 工具执行 VM（沙箱）', sub: '双平面物理隔离' },
+  { name: '④ 证据记录', desc: '带外采集 · 快照封存', sub: '哈希验签 → 无网判卷' },
+];
+const GW_QUOTA = [
+  { label: '密钥隔离', main: '租户密钥', sub: 'HSM 托管 · 按租户命名空间隔离', foot: '轮换正常 · 90d 周期' },
+  { label: 'Token 计量（今日）', main: '输入 96.2M · 输出 88.4M', sub: '占日预算 62%', foot: '' },
+  { label: '限流策略', main: '600 rpm / 租户', sub: '令牌桶 · 突发上限 120 · 并发 32', foot: '今日限流命中 37 次' },
+  { label: '成本统计（本月）', main: '评测线 58% · 训练线 34% · 实战线 8%', sub: '单日超 ¥5,000 自动熔断', foot: '' },
+];
+
+
+/* ════════════════════════════════════════════════════════════════
+ * V3.5 · 新增模块数据（外部接入 / 会话管理 / 业务监控 / 测试题集 / 个人中心）
+ * ════════════════════════════════════════════════════════════════ */
+
+/* ── 内置托管模型 / Agent（TT-05 · 平台托管固定选项，来自安全中心）── */
+const BUILTIN_MODELS = [
+  { id: 'mythos-attack-v2', name: 'Mythos-Attack-v2', kind: 'Agent', tag: '自研 · 渗透' },
+  { id: 'pentestgpt',       name: 'PentestGPT',       kind: 'Agent', tag: '通用 · 渗透' },
+  { id: 'reconx',           name: 'ReconX',           kind: 'Agent', tag: '渗透专用' },
+  { id: 'sentinel-7b',      name: 'Sentinel-7B',      kind: 'Agent', tag: '自研小模型' },
+  { id: 'gpt-4o',           name: 'GPT-4o',           kind: '模型',  tag: 'OpenAI' },
+  { id: 'claude-4',         name: 'Claude-4',         kind: '模型',  tag: 'Anthropic' },
+  { id: 'qwen25-72b',       name: 'Qwen2.5-72B',      kind: '模型',  tag: '开源' },
+  { id: 'mythos-chat-v1',   name: 'Mythos-Chat-v1',   kind: '模型',  tag: '自研' },
+];
+/* ── 外部接入模型 / Agent（TT-06 · 仅接入网关校验成功后可见，与 AG-03 联动）── */
+const EXT_AGENTS = [
+  { id: 'ext-glm52',  name: 'GLM-5.2（外部）',        kind: '模型',  endpoint: 'https://open.bigmodel.cn/api/paas/v4', verified: true,  verifiedAt: '2026-08-05 16:20' },
+  { id: 'ext-gpt54',  name: 'GPT-5.4（外部接入）',     kind: '模型',  endpoint: 'https://api.openai.com/v1',            verified: true,  verifiedAt: '2026-08-04 11:02' },
+  { id: 'ext-claude', name: 'Claude-Opus-4.7（外部）', kind: '模型',  endpoint: 'https://api.anthropic.com',            verified: true,  verifiedAt: '2026-08-03 09:44' },
+  { id: 'ext-redbot', name: 'RedBot-X（客户侧 Agent）', kind: 'Agent', endpoint: 'https://agent.customer.lab/mcp',      verified: false, verifiedAt: '' },
+];
+/* ── 接入 Agent 会话管理（AG-04 · Mock）────────────────────────── */
+const AG_SESSIONS = [
+  { id: 'SES-20260805-21', agent: 'GLM-5.2（外部）',        time: '2026-08-05 16:22', task: 'SCN-02 电网 · 漏利评测',  result: '完成 · 综合 94.2', turns: 88 },
+  { id: 'SES-20260805-18', agent: 'GPT-5.4（外部接入）',     time: '2026-08-05 14:07', task: 'ExploitGym t3 · 纯代码评测', result: '完成 · 综合 58.6', turns: 64 },
+  { id: 'SES-20260804-33', agent: 'Claude-Opus-4.7（外部）', kind: '', time: '2026-08-04 11:26', task: 'SCN-02 · 渗透', result: '完成 · 综合 92.0', turns: 112 },
+  { id: 'SES-20260804-19', agent: 'GLM-5.2（外部）',        time: '2026-08-04 09:15', task: '接入校验 · 连通性探测',    result: '校验通过', turns: 6 },
+  { id: 'SES-20260803-27', agent: 'RedBot-X（客户侧 Agent）', time: '2026-08-03 17:40', task: '接入校验 · 连通性探测',   result: '校验失败 · 证书过期', turns: 2 },
+];
+/* ── 接入校验步骤（AG-03 · Mock 流程展示）───────────────────────── */
+const AG_VERIFY_STEPS = ['密钥鉴权（API Key + mTLS）', '连通性探测（受限任务视图下发）', 'action / observation 循环试跑', '证据通道回传验证', '写入外部模型 / Agent 列表'];
+
+/* ── 监控中心 · 业务监控（MC-01 · 真实口径待安全侧提供，假数据兜底）── */
+const MON_VULNS = [
+  { id: 'CVE-2026-1187', title: 'SecPath NGFW 远程命令执行', level: '高危', asset: '外联服务区', time: '12:02:44', status: '处置中' },
+  { id: 'CVE-2026-0921', title: '堡垒机会话劫持风险', level: '高危', asset: '网络管理区', time: '11:47:19', status: '已确认' },
+  { id: 'CVE-2025-8834', title: 'OA 协同服务端文件上传', level: '中危', asset: '内网办公区', time: '10:31:55', status: '已隔离' },
+  { id: 'CVE-2025-8720', title: '日志审计 Web 控制台 XSS', level: '低危', asset: '数据中心区', time: '09:26:08', status: '已修复' },
+];
+const MON_BEHAVIORS = [
+  { text: '账号 svc-backup 非常用时段登录堡垒机', level: '中', time: '12:11:03', src: '堡垒机审计' },
+  { text: '终端 OA-033 批量外发压缩包（18 min 内 2.1 GB）', level: '高', time: '11:58:37', src: 'DLP' },
+  { text: '调度员工作站 RDP 会话异地建立', level: '中', time: '11:22:50', src: 'EDR' },
+  { text: 'DNS 隧道特征域名解析（*.exfil-cdn.io）', level: '高', time: '10:54:12', src: 'DNS 安全' },
+];
+const MON_TRAFFIC = [
+  { label: '互联网出口带宽', val: '6.8 / 10 Gbps', pct: 68 },
+  { label: '数据中心区东西向流量', val: '22.4 Gbps', pct: 74 },
+  { label: '外联服务区异常连接', val: '37 / min', pct: 41 },
+  { label: '蜜罐触碰次数（今日）', val: '12 次', pct: 24 },
+];
+
+/* ── 测试题集（DC-03 / TT-04 · 管理员上传维护，用户只读可选）────── */
+const QUESTION_SETS = [
+  { id: 'qs-01', name: 'Mythos 安全红线全集 v830', size: '450 题', source: '安全中心 · 管理员上传', updated: '2026-07-27', desc: '自研红线全集：15 大类完整覆盖，830 评测基准题集。' },
+  { id: 'qs-02', name: 'ExploitGym 渗透链题集', size: '320 题', source: '业务方 · 管理员上传', updated: '2026-07-25', desc: '端到端利用链拆解题面，对齐 ExploitGym t1-t3 难度。' },
+  { id: 'qs-03', name: '提示注入与越狱抗性题集', size: '540 题', source: '安全中心 · 管理员上传', updated: '2026-07-22', desc: '直接 / 间接注入、多轮渐进越狱（角色扮演 → 虚构授权）。' },
+  { id: 'qs-04', name: '工控协议滥用题集', size: '132 题', source: '靶场组 · 管理员上传', updated: '2026-06-18', desc: 'Modbus / DNP3 / IEC104 协议滥用与指令注入场景。' },
+];
+
+/* ── 个人中心 · 登录与操作记录（AC-03 · 假数据兜底）────────────── */
+const AC_LOGIN_LOGS = [
+  { time: '2026-08-06 09:41', action: 'SSO 登录成功', ip: '10.60.4.71', device: 'OA 办公终端 · Edge' },
+  { time: '2026-08-05 18:02', action: '创建接入密钥「CI 流水线 · 夜间回归」', ip: '10.60.4.71', device: 'OA 办公终端 · Edge' },
+  { time: '2026-08-05 16:20', action: '发起接入校验 · GLM-5.2（外部）', ip: '10.60.4.71', device: 'OA 办公终端 · Edge' },
+  { time: '2026-08-05 08:57', action: 'SSO 登录成功', ip: '10.60.4.71', device: 'OA 办公终端 · Edge' },
+  { time: '2026-08-04 21:13', action: '提交测试任务 JOB-20260804-07', ip: '10.60.2.51', device: '调度员工作站 · Chrome' },
+  { time: '2026-08-04 08:33', action: 'SSO 登录成功', ip: '10.60.2.51', device: '调度员工作站 · Chrome' },
+];
+
+
+/* ════════════════════════════════════════════════════════════════
+ * V3.5 修订 · 外部 Agent 运营统计 + 数据中心数据集（Mock 占位）
+ * ════════════════════════════════════════════════════════════════ */
+
+/* 外部接入 Agent 运营统计（接入网关默认页仪表盘） */
+const EXT_AGENT_STATS = {
+  'ext-glm52':  { tasks: 46,  tokens: '3,240 万', traj: '4.1 万条', cost: '¥ 1,286' },
+  'ext-gpt54':  { tasks: 31,  tokens: '2,180 万', traj: '2.8 万条', cost: '¥ 1,904' },
+  'ext-claude': { tasks: 58,  tokens: '4,620 万', traj: '5.6 万条', cost: '¥ 2,417' },
+  'ext-redbot': { tasks: 0,   tokens: '—',        traj: '—',        cost: '—' },
+};
+const EXT_AGENT_TOTAL = { tasks: 135, tokens: '1.0 亿', traj: '12.5 万条', cost: '¥ 5,607' };
+
+/* 数据中心 · 轨迹数据集 / 风险数据集（平台数据输出出口，Mock 体量） */
+const DC_TRAJ_DS = [
+  { id: 'TRJ-2026-081', name: 'SCN-01 金融核心网渗透轨迹', source: '靶场任务回流', size: '4.1 万条', updated: '2026-08-05', fmt: 'jsonl' },
+  { id: 'TRJ-2026-076', name: 'SCN-02 电网调度攻防轨迹', source: '靶场任务回流', size: '3.6 万条', updated: '2026-08-04', fmt: 'jsonl' },
+  { id: 'TRJ-2026-069', name: 'ExploitGym t1-t3 利用链轨迹', source: '评测任务回流', size: '3.2 万条', updated: '2026-08-02', fmt: 'jsonl' },
+  { id: 'TRJ-2026-055', name: 'PatchSmith 修复轨迹', source: '修复评测回流', size: '2.2 万条', updated: '2026-07-28', fmt: 'jsonl' },
+];
+const DC_RISK_DS = [
+  { id: 'RSK-2026-044', name: '越权操作风险样本集', size: '8,420 条', level: '高', updated: '2026-08-05' },
+  { id: 'RSK-2026-041', name: '提示注入对抗样本集', size: '6,310 条', level: '高', updated: '2026-08-03' },
+  { id: 'RSK-2026-037', name: '敏感数据泄露样本集', size: '4,108 条', level: '中', updated: '2026-07-30' },
+  { id: 'RSK-2026-029', name: '工控指令合规样本集', size: '2,054 条', level: '中', updated: '2026-07-24' },
+];
+const DC_VOLUME = [
+  ['轨迹数据集', '12.5 万条', '▲ 本周 +1.8 万'],
+  ['风险数据集', '2.1 万条', '▲ 本周 +3,204'],
+  ['测试题库', '24 套 · 6842 题', '▲ 本周 +2 套'],
+  ['评测报告', '1,256 份', '▲ 本周 +37'],
+  ['模型版本', '12 个', '▲ 本周 +3'],
+  ['接入会话', '1,908 次', '▲ 本周 +126'],
+];
+
+
+/* ════════════════════════════════════════════════════════════════
+ * V3.5 修订 · 态势感知首页大屏版（多 Run 对比 / 训练控制 / 终端预警）
+ * ════════════════════════════════════════════════════════════════ */
+const DASH_MULTI_RUNS = [
+  { run: 'Run-0833', type: 'RL 强化学习', ds: 'ExploitGym 3.6万', prog: '79.7%', kl: '2e-4', score: '3.9/s' },
+  { run: 'Run-0832', type: 'CPT 预训练', ds: '安全语料 38万', prog: '72.4%', kl: '2e-4', score: '3.2/s' },
+  { run: 'Run-0831', type: 'SFT 微调', ds: '指令对 6.4万', prog: '61.8%', kl: '1e-4', score: '2.7/s' },
+];
+const DASH_CTRL = {
+  run: 'Run-0833 · RL 强化学习', status: '运行中', ds: 'ExploitGym 轨迹 3.6万',
+  hp: [['LR', '2e-4'], ['调度', 'Cosine'], ['Warmup', '5%'], ['Epoch', '30/120'], ['Batch', '64'], ['并行', 'DP4+8'], ['精度', 'FP16'], ['梯度裁剪', '1.0']],
+};
+const DASH_TERM_POOL = [
+  '[EVAL]  CyberGym t2 · pass@1 0.58 · step {s}',
+  '[TRAIN] ppo_kl {k} · entropy 0.61 · clipfrac 0.09',
+  '[FETCH] 轨迹回流 +96 条 · 去重完成',
+  '[CKPT]  checkpoint-step-{s} 已保存 · SHA256 ✓',
+  '[WARN]  Run-0831 学习率余弦衰减至 1.2e-4',
+  '[INFO]  GPU-Pool-A 心跳正常 · 利用率 {u}%',
 ];
