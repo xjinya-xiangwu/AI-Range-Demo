@@ -726,7 +726,7 @@ const RANGE_KILLCHAIN = ['侦察探测', '漏洞利用', '权限提升', '横向
 const RANGE_SCENES = {
   corp: {
     key: 'corp',
-    name: '企业内网（5 网区 20 节点）',
+    name: 'ENT-0520 靶场',
     title: '企业内网横向移动攻防演练',
     badge: '真实环境 · 红蓝对抗',
     subnet: '10.10.0.0/24 → 10.20.4.0/24 · 4 个隔离子网',
@@ -816,7 +816,7 @@ const RANGE_SCENES = {
   },
   grid: {
     key: 'grid',
-    name: '华中电网调度中心',
+    name: 'ENG-0414 靶场',
     title: '华中电网调度中心红蓝对抗演练',
     badge: '红蓝对抗 · 智能体执行',
     subnet: '10.60.1.0/24 · 调度数据网',
@@ -899,7 +899,7 @@ const RANGE_SCENES = {
   },
   nuclear: {
     key: 'nuclear',
-    name: '秦山核电本地化指挥中心',
+    name: 'ENG-0416 靶场',
     title: '秦山核电指挥中心攻防演练',
     badge: '攻防演练 · 智能体执行',
     subnet: '172.20.3.0/24 · 核电内网',

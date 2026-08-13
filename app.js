@@ -4411,20 +4411,29 @@ function renderTw2() {
       body.innerHTML = `
       <div class="wz-field"><span class="field-label">选择靶场环境（可跳靶场大厅查看详情，返回后已选配置保留）</span>
         <div class="env-grid" style="grid-template-columns:1fr 1fr">
-          ${Object.values(RANGE_SCENES).map((sc) => `
-          <div class="card env-card tw2-env ${tw.envKey === sc.key ? 'selected' : ''}" data-tw2env="${sc.key}" style="cursor:pointer">
-            <div class="env-card-head"><span class="env-title" style="font-size:13px">${sc.name}</span>
-              <span class="env-status"><span class="dot dot-ok"></span>运行中</span></div>
-            <div class="env-desc">${sc.zones.length} 个网区 · ${sc.nodes.length} 类节点 · 含可利用与诱饵节点</div>
-            <div class="env-meta" style="border:none;padding-top:0"><span class="mono">${sc.subnet}</span></div>
-          </div>`).join('')}
+          ${HALL_CASES.map((c) => {
+            const d = HALL_CASE_DETAIL[c.id] || {};
+            const scKey = HALL_SCENE_OF[c.id];
+            const sc = scKey ? RANGE_SCENES[scKey] : null;
+            const usable = d.state === '可进入' && !!sc;
+            return `
+          <div class="card env-card tw2-env ${usable && tw.envKey === scKey ? 'selected' : ''}" data-tw2env="${usable ? scKey : ''}" style="cursor:${usable ? 'pointer' : 'not-allowed'};${usable ? '' : 'opacity:.55'}">
+            <div class="env-card-head"><span class="env-title" style="font-size:13px">${c.name}</span>
+              <span class="env-status"><span class="dot ${usable ? 'dot-ok' : 'dot-warn'}"></span>${usable ? '运行中' : '待接入'}</span></div>
+            <div class="env-desc">${sc ? `${sc.zones.length} 个网区 · ${sc.nodes.length} 类节点 · 含可利用与诱饵节点` : esc(c.desc)}</div>
+            <div class="env-meta" style="border:none;padding-top:0"><span class="mono">${sc ? sc.subnet : (d.nets || '')}</span></div>
+          </div>`;
+          }).join('')}
         </div>
       </div>
       <p class="mini-note">环境拓扑 / 漏洞面 / 可利用节点与诱饵节点详情见 <a id="tw2-hall" style="color:var(--primary);cursor:pointer">靶场大厅 →</a>（跳转后回到本流程配置保留）</p>`;
-      $$('[data-tw2env]').forEach((c) => c.addEventListener('click', () => {
-        tw.envKey = c.dataset.tw2env;
-        $$('[data-tw2env]').forEach((x) => x.classList.toggle('selected', x === c));
-      }));
+      $$('[data-tw2env]').forEach((c) => {
+        if (!c.dataset.tw2env) return;
+        c.addEventListener('click', () => {
+          tw.envKey = c.dataset.tw2env;
+          $$('[data-tw2env]').forEach((x) => x.classList.toggle('selected', x === c));
+        });
+      });
       $('#tw2-hall').addEventListener('click', () => {
         closeModal();
         location.hash = '#/range-hall';
