@@ -77,7 +77,7 @@ const ROUTE_ALIASES = {
 const NAV_OF = {
   dashboard: 'dashboard',
   tasks: 'tasks', workbench: 'tasks',
-  'range-hall': 'range-hall', range: 'range-hall',
+  'range-hall': 'range-hall', range: 'range-hall', 'range-detail': 'range-hall',
   confirm: 'confirm',
   training: 'training', 'training-live': 'training-live', models: 'models',
   battle: 'battle',
@@ -95,7 +95,7 @@ function parseHash() {
 }
 function router() {
   clearTimers(); closeModal(); closeUserPop(); closeDlPop(); hideTopoTip(); closeRgPops();
-  const { route } = parseHash();
+  const { route, params } = parseHash();
   const r = ROUTE_ALIASES[route] || route;
   /* SSO 鉴权门（AC-01/02 · 真实 SSO 的演示替身） */
   const authed = sessionStorage.getItem('cr-auth') === '1';
@@ -114,6 +114,7 @@ function router() {
   else if (r === 'range') renderRange();
   else if (r === 'tasks') renderTasks();
   else if (r === 'range-hall') renderRangeHall();
+  else if (r === 'range-detail') renderRangeDetail(params.env || 'SCN-01');
   else if (r === 'confirm') renderConfirm();
   else if (r === 'training') renderTraining();
   else if (r === 'training-live') renderTrainingLive();
@@ -151,7 +152,7 @@ const sims = SIM_RUNS.map(() => ({ idx: 0, tick: 0, started: Date.now() }));
 
 function renderTasks() {
   const userRunning = sessionStorage.getItem('aisr-running') === '1';
-  rangeState.scene = 'grid';
+  rangeState.scene = 'corp';
   $('#view').innerHTML = `
   <div class="page">
     ${backLink('#/dashboard', '态势感知')}
@@ -352,7 +353,7 @@ function renderDoneGrid() {
  * 进度模型：live.acc 累积速度 → 按节点防护成本推进 step；剧本循环重播
  * rangeCtl：节点开关/配置、环境注入、全局暂停等可操作状态（重置可恢复）
  * ════════════════════════════════════════════════════════════════ */
-const rangeState = { scene: 'grid' };
+const rangeState = { scene: 'corp' };
 const rangeLive = {};
 Object.keys(RANGE_SCENES).forEach((k) => { rangeLive[k] = { step: 0, tick: 0, acc: 0, logN: 0, t0: Date.now(), lines: [] }; });
 
@@ -815,7 +816,9 @@ function openAddNodePop(sceneKey, zoneId) {
   const zone = sc.zones.find((z) => z.id === zoneId);
   const seq = ctl.addSeq;
   const zi = sc.zones.findIndex((z) => z.id === zoneId);
-  const autoIp = `${sceneKey === 'grid' ? '10.60' : '172.20'}.${zi + 1}.${100 + seq}`;
+  const autoIp = sceneKey === 'corp'
+    ? `${['10.10.0', '10.20.1', '10.20.2', '10.20.3', '10.20.4'][zi] || '10.20.9'}.${100 + seq}`
+    : `${sceneKey === 'grid' ? '10.60' : '172.20'}.${zi + 1}.${100 + seq}`;
   const a = rgAnchor(sceneKey, zone.x + zone.w / 2, 52); if (!a) return;
   const pop = document.createElement('div');
   pop.className = 'rg-pop rg-addpop'; pop.id = 'rg-addpop';
@@ -1150,7 +1153,7 @@ function renderMpStep3() {
 
 /* 靶场虚拟环境 / 网络拓扑预览（全部节点「未到达」初始态，静态展示） */
 function envPreviewHtml(skinKey) {
-  const skin = TOPO_SKINS[skinKey] || TOPO_SKINS.grid;
+  const skin = TOPO_SKINS[skinKey] || TOPO_SKINS.corp;
   const idle = Object.fromEntries(skin.nodes.map((n) => [n.id, 'idle']));
   return `
     <div class="env-preview">
@@ -1183,7 +1186,7 @@ function wizardDefaults(category, p) {
   } else {
     if (category === 'redblue') {
       s.envId = s.envId || ENVIRONMENTS.find((e) => e.status === 'available').id;
-      s.simEnv = s.simEnv || (findEnv(s.envId) || {}).skin || 'grid';
+      s.simEnv = s.simEnv || (findEnv(s.envId) || {}).skin || 'corp';
       s.mode = s.mode || 'test';
     } else {
       s.envId = s.envId || AGENTRISK_ENVS[0].id;
@@ -1193,8 +1196,8 @@ function wizardDefaults(category, p) {
     }
     s.agentId = s.agentId || AGENTS[0].id;
     s.envTask = s.envTask || ENV_TASKS[s.simEnv][0];
-    s.network = s.network || NETWORK_ENVS[0];
-    s.modules = s.modules && s.modules.length ? s.modules : SIM_MODULES.slice(0, 3);
+    s.network = s.network || (s.simEnv === 'corp' ? '多子网隔离' : NETWORK_ENVS[0]);
+    s.modules = s.modules && s.modules.length ? s.modules : (s.simEnv === 'corp' ? ['WordPress', 'Redis', 'FoxCMS', 'MySQL'] : SIM_MODULES.slice(0, 3));
     s.conditions = s.conditions || { load: 42, temp: 24, concurrency: 300, latency: 20 };
   }
   return s;
@@ -1214,7 +1217,7 @@ function cfgSummary(cfg) {
       ['评测场景', cfg.scene],
     ];
   }
-  const skin = TOPO_SKINS[cfg.simEnv] || TOPO_SKINS.grid;
+  const skin = TOPO_SKINS[cfg.simEnv] || TOPO_SKINS.corp;
   const c = cfg.conditions || {};
   const common = [
     ['仿真环境', skin.name],
@@ -1313,7 +1316,7 @@ function openWizard(category, prefill) {
     body.innerHTML =
       (isRB ? `<div class="wz-env-preview">${envPreviewHtml(st.simEnv)}</div>` : '') +
       field(`<span class="field-label">仿真环境（决定拓扑皮肤）</span>
-        ${chips('wz-simenv', [{ v: 'grid', t: '电网调度中心' }, { v: 'nuclear', t: '核电指挥中心' }], st.simEnv)}`) +
+        ${chips('wz-simenv', (isRB ? [{ v: 'corp', t: '企业内网（5 网区 20 节点）' }, { v: 'grid', t: '电网调度中心' }, { v: 'nuclear', t: '核电指挥中心' }] : [{ v: 'grid', t: '电网调度中心' }, { v: 'nuclear', t: '核电指挥中心' }]), st.simEnv)}`) +
       (isRB ? field(`<span class="field-label">靶场环境（漏洞）</span>
         <select class="select" id="wz-env">${ENVIRONMENTS.filter((e) => e.status === 'available').map((e) => `<option value="${e.id}" ${st.envId === e.id ? 'selected' : ''}>${e.id} · ${e.title}</option>`).join('')}</select>`) : '') +
       field(`<span class="field-label">环境特有任务</span>
@@ -2967,7 +2970,7 @@ window.addEventListener('resize', () => { closeRgPops(); hideTopoTip(); });
  * ════════════════════════════════════════════════════════════════ */
 const dashState = {
   slide: 0, slideTick: 0, paused: false,
-  steps: { grid: 4, nuclear: 2 },
+  steps: { corp: 5, nuclear: 2 },
   events: [],
   metrics: OV_METRICS.map((m) => ({ ...m })),
   train: { ...OV_TRAIN_LIVE },
@@ -3102,7 +3105,7 @@ function tickDash() {
     const el = $('#ovm-' + i); if (el) el.textContent = dashState.metrics[i].value.toLocaleString();
   });
   /* 拓扑推进：两个在线场景各进一步，跑完循环（OV-02 · 24h 循环 mock） */
-  ['grid', 'nuclear'].forEach((k) => {
+  ['corp', 'nuclear'].forEach((k) => {
     const len = RANGE_SCENES[k].path.length;
     dashState.steps[k] = dashState.steps[k] > len + 3 ? 0 : dashState.steps[k] + 1;
   });
@@ -3598,7 +3601,7 @@ function trnTaskCard(t, i) {
       <span class="trn-name">${esc(t.name)}</span>
       <span class="badge badge-primary">${t.type}</span>
       <span class="badge ${TRN_STATUS_CLS[t.status]}">${TRN_STATUS_CN[t.status]}</span>
-      ${t.pinned ? '<span class="badge badge-example">置顶</span>' : ''}
+      ${t.pinned ? '<span class="badge badge-example">演示任务</span>' : ''}
       <span style="flex:1"></span>
       <span class="small muted mono">${t.id}</span>
     </div>
@@ -3656,7 +3659,7 @@ function renderTraining() {
     </div>
     <p class="mini-note" id="pipe-desc" style="margin:-8px 0 20px">${trnState.pipeSel >= 0 ? esc(TRN_PIPELINE[trnState.pipeSel].desc) : '数据准备（数据工厂）→ 训练配置 → 训练执行 → 实时监控大屏 → 发布备份（模型版本）'}</p>
 
-    <div class="history-head">任务列表<span class="head-badge">已完成任务置顶 · 进度定时跳动</span></div>
+    <div class="history-head">任务列表<span class="head-badge">演示任务置顶 · 与态势感知训练面板同源 · 进度定时跳动</span></div>
     ${ordered.map((t) => trnTaskCard(t, trnState.tasks.indexOf(t))).join('')}
   </div>`;
 
@@ -3850,7 +3853,7 @@ function renderTrainingLive() {
     </div>
 
     <div class="card" style="margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      <span class="badge badge-primary">Checkpoint 版本管理 · 最新</span>
+      <span class="badge badge-primary">Checkpoint 版本管理 · 当前</span>
       <span class="mono small">v2.2-ckpt-37200</span>
       <span class="small muted">保存于 2026-08-04 14:00 · 评估分 92.4 · SHA256 校验通过</span>
       <span style="flex:1"></span>
@@ -3979,7 +3982,7 @@ function renderRangeHall() {
         </div>
         <div class="env-actions" style="margin-top:auto">
           ${enterable
-            ? `<button class="btn btn-outline btn-sm" data-hall-enter="${c.id === 'SCN-01' ? 'grid' : 'nuclear'}">进入环境</button>`
+            ? `<button class="btn btn-outline btn-sm" data-hall-enter="${c.id === 'SCN-01' ? 'corp' : 'nuclear'}">进入环境</button>`
             : '<button class="btn btn-outline btn-sm" disabled title="场景接入中">待接入</button>'}
         </div>
       </div>`;
@@ -4022,7 +4025,7 @@ function renderRangeHall() {
           <span class="env-status"><span class="dot ${e.status === 'available' ? 'dot-ok' : 'dot-warn'}"></span>${e.status === 'available' ? '可用' : '维护中'}</span>
         </div>
         <div class="env-desc">${esc(e.principle)}</div>
-        <div class="env-meta"><span>${e.milestones} 个里程碑</span><span>预估 ${e.duration}</span><span>${e.skin === 'grid' ? '电网拓扑' : '核电拓扑'}</span></div>
+        <div class="env-meta"><span>${e.milestones} 个里程碑</span><span>预估 ${e.duration}</span><span>${({ corp: '企业内网拓扑', grid: '电网拓扑', nuclear: '核电拓扑' })[e.skin] || '内网拓扑'}</span></div>
         <div class="env-actions" style="margin-top:auto">
           <button class="btn btn-outline btn-sm" data-hall-cve="${e.id}" ${e.status !== 'available' ? 'disabled title="维护中"' : ''}>使用模板发起评测</button>
         </div>
@@ -4345,7 +4348,7 @@ function renderLogin(mode) {
  * 测试任务 · 创建向导（TT-01~08 · 选类型 → 选环境与题集 → 选模型/Agent → 安全约束）
  * ════════════════════════════════════════════════════════════════ */
 const tw = {
-  step: 1, type: null, envKey: 'grid', setId: 'qs-01',
+  step: 1, type: null, envKey: 'corp', setId: 'qs-01',
   modelTab: 'builtin', modelId: 'mythos-attack-v2',
   protocol: 'openai_responses', harness: 'codex', keyId: 'key-01',
   constraints: { duration: 45, token: 20, tools: 60, cost: 200 },
@@ -4517,8 +4520,12 @@ function submitTaskWizard() {
     ? { category: 'eval', mode: 'auto', objectKind: (BUILTIN_MODELS.find((m) => m.id === tw.modelId) || {}).kind === '模型' ? 'llm' : 'agent',
         objectId: LLMS.some((l) => l.id === tw.modelId) ? tw.modelId : AGENTS.some((a) => a.id === tw.modelId) ? tw.modelId : 'mythos-attack-v2',
         banks: [...QUESTION_BANKS], dynamicBank: true, methods: ['直接注入', '多轮诱导'], rounds: 3, scene: '运维操作' }
-    : { category: 'redblue', mode: 'battle', envId: 'CVE-2024-21762', simEnv: tw.envKey,
-        envTask: ENV_TASKS[tw.envKey][0], network: '带 DMZ 暴露面', modules: SIM_MODULES.slice(0, 3),
+    : { category: 'redblue', mode: 'battle',
+        envId: { corp: 'CVE-2024-8353', grid: 'CVE-2024-21762', nuclear: 'CVE-2023-4863' }[tw.envKey] || 'CVE-2024-8353',
+        simEnv: tw.envKey,
+        envTask: ENV_TASKS[tw.envKey][0],
+        network: tw.envKey === 'corp' ? '多子网隔离' : '带 DMZ 暴露面',
+        modules: tw.envKey === 'corp' ? ['WordPress', 'Redis', 'FoxCMS', 'MySQL'] : SIM_MODULES.slice(0, 3),
         conditions: { load: 42, temp: 24, concurrency: 300, latency: 20 },
         agentId: AGENTS.some((a) => a.id === tw.modelId) ? tw.modelId : 'mythos-attack-v2' };
   cfg.constraints = { ...c };
@@ -5333,25 +5340,32 @@ function renderModels() {
 }
 
 /* ════════════════════════════════════════════════════════════════
- * 页面 · 靶场大厅（V3.5 覆盖版 · 隶属测试任务，创建流程可跳转返回）
+ * 页面 · 靶场大厅（V3.6 简化版 · 仅预设靶场环境：静态详情 + 选用创建）
  * ════════════════════════════════════════════════════════════════ */
+const HALL_SCENE_OF = { 'SCN-01': 'corp', 'SCN-02': 'nuclear' };
+function hallUseEnv(envId) {
+  const c = HALL_CASES.find((x) => x.id === envId);
+  const d = HALL_CASE_DETAIL[envId] || {};
+  if (d.state !== '可进入') { showToast('该场景接入中 · 暂不可创建任务'); return; }
+  tw.type = 'range'; tw.envKey = HALL_SCENE_OF[envId] || 'corp'; tw.step = 1;
+  openTaskWizard();
+  showToast(`已选用「${c ? c.name : envId}」· 创建流程配置保留`);
+}
 function renderRangeHall() {
   $('#view').innerHTML = `
   <div class="page">
     ${backLink('#/tasks', '测试任务')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">靶场大厅 ${helpTip('浏览全部靶场环境：演示场景、常驻靶场环境与漏洞环境库。查看环境拓扑、漏洞面、可利用与诱饵节点；可直接选用环境发起测试任务，或进入控制台观察运行中的演练。')}</h2>
-        <p class="page-desc">靶场环境总览与详情 · 拓扑 / 漏洞面 / 可利用与诱饵节点 · 创建任务流程中可随时跳转查看</p>
+        <h2 class="page-title">靶场大厅 ${helpTip('平台预设的靶场环境清单：点击「查看环境详情」静态浏览环境拓扑与参数；点击「使用该环境创建任务」将该环境作为模板，直接跳转新建任务流程。')}</h2>
+        <p class="page-desc">1 套真实接入环境 + 4 套预置演示场景 · 环境详情为静态展示（拓扑 / 参数），不进入执行任务 · 选用环境可直接跳转新建任务流程</p>
       </div>
       <button class="btn btn-primary" id="hall-new">新建测试任务</button>
     </div>
-
-    <div class="history-head">演示场景<span class="head-badge">SCN-01 已接入真实环境 · 无实时任务时自动轮播</span></div>
-    <div class="env-grid" style="margin-bottom:32px">
+    <div class="env-grid">
       ${HALL_CASES.map((c) => {
         const d = HALL_CASE_DETAIL[c.id] || {};
-        const enterable = c.id === 'SCN-01' || c.id === 'SCN-02';
+        const usable = d.state === '可进入';
         return `
       <div class="card env-card">
         <div class="env-card-head">
@@ -5359,7 +5373,7 @@ function renderRangeHall() {
           <span style="display:flex;gap:6px">
             <span class="badge badge-primary">${d.industry || ''}</span>
             ${c.real ? '<span class="badge badge-olive">真实接入</span>' : '<span class="badge">预置演示</span>'}
-            <span class="badge ${enterable ? 'badge-olive' : 'badge-gold'}">${d.state || ''}</span>
+            <span class="badge ${usable ? 'badge-olive' : 'badge-gold'}">${d.state || ''}</span>
           </span>
         </div>
         <div class="env-title">${esc(c.name)}</div>
@@ -5374,74 +5388,85 @@ function renderRangeHall() {
           ${(d.stages || []).map((s, i) => `<div class="jd-ms${i === 0 ? ' done' : ''}">${s}</div>`).join('')}
         </div>
         <div class="env-actions" style="margin-top:auto">
-          ${enterable
-            ? `<button class="btn btn-outline btn-sm" data-hall-enter="${c.id === 'SCN-01' ? 'grid' : 'nuclear'}">进入环境</button>
-               <button class="btn btn-ghost btn-sm" data-hall-use="${c.id === 'SCN-01' ? 'grid' : 'nuclear'}">选用该环境</button>`
-            : '<button class="btn btn-outline btn-sm" disabled title="场景接入中">待接入</button>'}
+          <button class="btn btn-outline btn-sm" data-hall-use="${c.id}" ${usable ? '' : 'disabled title="场景接入中"'}>使用该环境创建任务</button>
+          <button class="btn btn-ghost btn-sm" data-hall-detail="${c.id}">查看环境详情</button>
         </div>
       </div>`;
       }).join('')}
     </div>
-
-    <div class="history-head">常驻靶场环境<span class="head-badge">拓扑 / 漏洞面 / 可利用与诱饵节点</span></div>
-    <div class="env-grid" style="margin-bottom:32px">
-      ${Object.values(RANGE_SCENES).map((sc) => `
-      <div class="card env-card">
-        <div class="env-card-head">
-          <span class="env-title" style="font-size:14px">${sc.name}</span>
-          <span class="env-status"><span class="dot dot-ok"></span>运行中</span>
-        </div>
-        <div style="border:1px solid var(--border);border-radius:var(--radius);padding:6px;background:var(--muted)">${dashTopoSvg(sc.key, 0)}</div>
-        <div class="env-meta" style="border:none;padding-top:0">
-          <span class="mono">${sc.subnet}</span>
-          <span>${sc.nodes.length} 类节点 · ${sc.zones.length} 个网区</span>
-        </div>
-        <div class="env-desc">漏洞面：${sc.agents.filter((a) => a.side === '攻击').map((a) => a.task).join('；')} · 含可利用节点与诱饵节点</div>
-        <div class="env-actions" style="margin-top:auto">
-          <button class="btn btn-ghost btn-sm" data-hall-use="${sc.key}">选用该环境</button>
-          <button class="btn btn-outline btn-sm" data-hall-enter="${sc.key}">进入控制台</button>
-        </div>
-      </div>`).join('')}
-    </div>
-
-    <div class="history-head">漏洞环境库<span class="head-badge">${ENVIRONMENTS.length} 个 CVE 复现环境</span></div>
-    <div class="env-grid">
-      ${ENVIRONMENTS.map((e) => `
-      <div class="card env-card">
-        <div class="env-card-head">
-          <span class="env-cve mono">${e.id}</span>
-          ${diffBadge(e.difficulty)}
-        </div>
-        <div class="env-title">${esc(e.title)}</div>
-        <div class="env-badges">
-          <span class="badge">${e.type}</span>
-          <span class="badge">CVSS ${e.cvss.toFixed(1)}</span>
-          <span class="env-status"><span class="dot ${e.status === 'available' ? 'dot-ok' : 'dot-warn'}"></span>${e.status === 'available' ? '可用' : '维护中'}</span>
-        </div>
-        <div class="env-desc">${esc(e.principle)}</div>
-        <div class="env-meta"><span>${e.milestones} 个里程碑</span><span>预估 ${e.duration}</span><span>${e.skin === 'grid' ? '电网拓扑' : '核电拓扑'}</span></div>
-        <div class="env-actions" style="margin-top:auto">
-          <button class="btn btn-outline btn-sm" data-hall-cve="${e.id}" ${e.status !== 'available' ? 'disabled title="维护中"' : ''}>选用并创建任务</button>
-        </div>
-      </div>`).join('')}
-    </div>
   </div>`;
   $('#hall-new').addEventListener('click', () => openTaskWizard());
-  $$('[data-hall-enter]').forEach((b) => b.addEventListener('click', () => {
-    rangeState.scene = b.dataset.hallEnter;
-    location.hash = '#/range';
-  }));
-  $$('[data-hall-use]').forEach((b) => b.addEventListener('click', () => {
-    tw.type = 'range'; tw.envKey = b.dataset.hallUse; tw.step = 1;
-    openTaskWizard();
-    showToast('已选用该靶场环境 · 创建流程配置保留');
-  }));
-  $$('[data-hall-cve]').forEach((b) => b.addEventListener('click', () => {
-    const e = findEnv(b.dataset.hallCve);
-    tw.type = 'range'; tw.envKey = e.skin; tw.step = 1;
-    openTaskWizard();
-    showToast(`已选用 ${e.id} 漏洞环境 · 创建流程配置保留`);
-  }));
+  $$('[data-hall-use]').forEach((b) => b.addEventListener('click', () => hallUseEnv(b.dataset.hallUse)));
+  $$('[data-hall-detail]').forEach((b) => b.addEventListener('click', () => { location.hash = `#/range-detail?env=${b.dataset.hallDetail}`; }));
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * 页面 · 靶场环境详情（静态页 · 拓扑结构 + 静态参数，非任务执行视图）
+ * ════════════════════════════════════════════════════════════════ */
+function renderRangeDetail(envId) {
+  const c = HALL_CASES.find((x) => x.id === envId) || HALL_CASES[0];
+  const d = HALL_CASE_DETAIL[c.id] || {};
+  const usable = d.state === '可进入';
+  const scKey = HALL_SCENE_OF[c.id];
+  const sc = scKey ? RANGE_SCENES[scKey] : null;
+  const decoys = sc ? sc.nodes.filter((n) => n.label.includes('诱饵')).length : 0;
+  const topoBlock = sc
+    ? `<div style="border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--muted)">${dashTopoSvg(scKey, 0)}</div>
+       <p class="mini-note" style="margin-top:6px">环境拓扑静态示意 · 含可利用节点与（诱饵）标注节点 · 本页为静态展示，非任务执行视图</p>`
+    : `<div style="border:1px dashed var(--border);border-radius:var(--radius);padding:40px;text-align:center;background:var(--muted)">
+        <p class="serif" style="font-size:18px">${c.id} 场景接入中</p>
+        <p class="small muted" style="margin-top:6px">拓扑结构将在环境接入后展示 · 当前仅提供预置环境参数</p>
+      </div>`;
+  const rows = [
+    ['场景编号', `<span class="mono">${c.id}</span>`],
+    ['行业分类', d.industry || '—'],
+    ['接入状态', c.real ? '真实接入' : '预置演示'],
+    ['网络规模', d.nets || '—'],
+    ['镜像构成', d.images || '—'],
+    ['预热与构建', d.warm || '—'],
+    ['适配 Agent', (d.agents || []).join(' / ') || '—'],
+    ['攻击阶段链', (d.stages || []).join(' → ') || '—'],
+    ...(sc ? [
+      ['子网规划', `<span class="mono">${sc.subnet}</span>`],
+      ['网区划分', `${sc.zones.length} 个网区（${sc.zones.map((z) => z.label.split(' · ')[0]).join(' / ')}）`],
+      ['节点规模', `${sc.nodes.length} 个节点 · 含 ${decoys} 个诱饵节点`],
+      ['漏洞面', sc.agents.filter((a) => a.side === '攻击').map((a) => a.task).join('；') || '—'],
+    ] : []),
+  ];
+  $('#view').innerHTML = `
+  <div class="page">
+    ${backLink('#/range-hall', '靶场大厅')}
+    <div class="page-head-row">
+      <div>
+        <h2 class="page-title">${esc(c.name)} ${helpTip('靶场环境静态详情：拓扑结构与环境参数均为静态展示。如需基于该环境发起评测，点击「使用该环境创建任务」进入新建任务流程，环境将自动预填。')}</h2>
+        <p class="page-desc"><span class="mono">${c.id}</span> · ${esc(c.desc)}</p>
+      </div>
+      <span style="display:flex;gap:6px;align-self:start">
+        <span class="badge badge-primary">${d.industry || ''}</span>
+        ${c.real ? '<span class="badge badge-olive">真实接入</span>' : '<span class="badge">预置演示</span>'}
+        <span class="badge ${usable ? 'badge-olive' : 'badge-gold'}">${d.state || ''}</span>
+      </span>
+    </div>
+
+    <div class="history-head">环境拓扑<span class="head-badge">静态展示 · 非执行视图</span></div>
+    ${topoBlock}
+
+    <div class="history-head" style="margin-top:24px">环境参数<span class="head-badge">静态参数 · 环境构建信息</span></div>
+    <div class="card" style="padding:4px 0">
+      <table class="mini-table">
+        <tbody>
+          ${rows.map(([k, v]) => `<tr><td class="muted" style="width:120px;white-space:nowrap">${k}</td><td>${v}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:24px;display:flex;gap:10px">
+      <button class="btn btn-primary" id="rd-use" ${usable ? '' : 'disabled title="场景接入中"'}>使用该环境创建任务</button>
+      <a class="btn btn-outline" href="#/range-hall">返回靶场大厅</a>
+    </div>
+  </div>`;
+  const useBtn = $('#rd-use');
+  if (useBtn && usable) useBtn.addEventListener('click', () => hallUseEnv(c.id));
 }
 
 
@@ -5878,8 +5903,8 @@ function openQueueTask(row) {
   /* 队列任务 → 完整任务运行详情页 */
   if (row.simIdx != null) { enterSimRun(row.simIdx); return; }
   const cfg = row.suite === '靶场环境评测'
-    ? { category: 'redblue', mode: 'battle', envId: 'CVE-2024-21762', simEnv: 'grid',
-        envTask: '负荷调度指令处理', network: '带 DMZ 暴露面', modules: ['SCADA', 'EMS', '历史数据库'],
+    ? { category: 'redblue', mode: 'battle', envId: 'CVE-2024-8353', simEnv: 'corp',
+        envTask: '企业内网横向移动', network: '多子网隔离', modules: ['WordPress', 'Redis', 'FoxCMS', 'MySQL'],
         conditions: { load: 42, temp: 24, concurrency: 300, latency: 20 }, agentId: 'mythos-attack-v2' }
     : { category: 'eval', mode: 'auto', objectKind: 'agent', objectId: 'mythos-attack-v2',
         banks: [...QUESTION_BANKS], dynamicBank: true, methods: ['直接注入', '多轮诱导'], rounds: 3, scene: '运维操作' };
@@ -5920,14 +5945,14 @@ function renderTasks() {
   const match = (t) => !q || (t.job + t.scene + t.agent).toLowerCase().includes(q);
   const matchSt = (t) => tqState.filter === 'all' || t.status === tqState.filter;
 
-  /* 运行中列表：创建时间降序；用户最新创建的任务置顶 */
+  /* 运行中列表：置顶演示任务固定在最前（与态势感知首页同源），其余按创建时间降序 */
   let rows = TASK_QUEUE.filter((t) => match(t) && matchSt(t));
   const userRow = userRunning && tqState.filter !== 'queued' ? (() => {
     const cfg = JSON.parse(sessionStorage.getItem('aisr-runCfg') || 'null');
     const title = cfg ? resolveRunMeta(cfg).title : '未命名任务';
     return `
     <tr>
-      <td class="mono small">JOB-20260806-NEW <span class="badge badge-gold">最新</span></td>
+      <td class="mono small">JOB-20260806-NEW</td>
       <td style="font-weight:500">${esc(title)}</td>
       <td class="small">${cfg && cfg.category === 'eval' ? '纯代码评测' : '靶场环境评测'}</td>
       <td class="small">${esc((cfg && cfg.agentId) || 'Mythos-Attack-v2')}</td>
@@ -5944,7 +5969,7 @@ function renderTasks() {
 
   const queueRows = rows.map((t) => `
     <tr>
-      <td class="mono small">${t.job}${t.pin ? ' <span class="badge badge-primary">置顶</span>' : ''}</td>
+      <td class="mono small">${t.job}${t.pin ? ' <span class="badge badge-primary">演示任务</span>' : ''}</td>
       <td style="font-weight:500">${esc(t.scene)}</td>
       <td class="small">${t.suite}</td>
       <td class="small">${esc(t.agent)}</td>
@@ -5982,7 +6007,7 @@ function renderTasks() {
     ${backLink('#/dashboard', '态势感知')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">任务中心 ${helpTip('测试任务的总览与入口：置顶演示任务基于真实靶场环境持续运行，与态势感知首页轮播同源；运行中队列按创建时间降序，最新创建的任务置顶，点击「详情」进入完整任务运行详情页；下方为已完成任务列表。')}</h2>
+        <h2 class="page-title">任务中心 ${helpTip('测试任务的总览与入口：置顶的演示任务基于真实靶场环境持续运行，与态势感知首页的演示场景同源，点击「详情」可查看完整运行过程；运行中队列按创建时间降序展示，下方为已完成任务列表。')}</h2>
         <p class="page-desc">测试任务的创建、队列与结果总览 · 评测任务 / 靶场任务统一入口</p>
       </div>
       <button class="btn btn-primary" id="btn-new-task">新建测试任务</button>
@@ -5995,7 +6020,7 @@ function renderTasks() {
     </div>
 
     <div class="history-head head-row">
-      <span>运行中任务列表<span class="head-badge">创建时间降序 · 最新置顶</span></span>
+      <span>运行中任务列表<span class="head-badge">演示任务置顶 · 创建时间降序</span></span>
       <span style="display:flex;gap:8px;align-items:center">
         <input class="input input-sm" id="tq-q" placeholder="搜索 JOB_ID / 场景 / Agent…" value="${esc(tqState.q)}" style="width:220px">
         ${[['all', '全部'], ['running', '运行中'], ['queued', '排队中']].map(([v, l]) => `<span class="chip-mini${tqState.filter === v ? ' selected' : ''}" data-tq-f="${v}">${l}</span>`).join('')}
@@ -6003,7 +6028,7 @@ function renderTasks() {
     </div>
     <table class="report-table res-table-wrap">
       <thead><tr><th>JOB_ID</th><th>场景 / 基准</th><th>类型</th><th>Agent / 模型</th><th class="num">并发</th><th>进度</th><th>状态</th><th></th></tr></thead>
-      <tbody>${userRow}${queueRows || '<tr><td colspan="8" class="small muted" style="text-align:center;padding:20px">无匹配任务</td></tr>'}</tbody>
+      <tbody>${queueRows}${userRow}${(!queueRows && !userRow) ? '<tr><td colspan="8" class="small muted" style="text-align:center;padding:20px">无匹配任务</td></tr>' : ''}</tbody>
     </table>
     <div class="small muted" style="margin:8px 0 28px">共 ${TASK_QUEUE.length + (userRunning ? 1 : 0)} 个任务 · 显示全部</div>
 
@@ -6231,7 +6256,7 @@ function renderTraining() {
     ${backLink('#/dashboard', '态势感知')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：5 步向导创建训练任务，列表实时展示运行 / 排队 / 完成 / 评估状态，可暂停或终止；训练流水线五阶段点击查看说明。')}</h2>
+        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：5 步向导创建训练任务；置顶的演示任务与态势感知首页的训练面板同源，点击「实时监控」可查看训练大屏；列表实时展示运行 / 排队 / 完成 / 评估状态，可暂停或终止。')}</h2>
         <p class="page-desc">训练任务的创建、调度与结果总览 · 进度实时跳动</p>
       </div>
       <button class="btn btn-primary" id="trn-new">新建训练任务</button>
@@ -6253,14 +6278,14 @@ function renderTraining() {
     </div>
     <p class="mini-note" id="pipe-desc" style="margin:-8px 0 20px">${trnState.pipeSel >= 0 ? esc(TRN_PIPELINE[trnState.pipeSel].desc) : '数据准备（数据工厂）→ 训练配置 → 训练执行 → 实时监控大屏 → 发布备份（模型版本）'}</p>
 
-    <div class="history-head">运行中任务列表<span class="head-badge">创建时间降序 · 进度实时跳动</span></div>
+    <div class="history-head">运行中任务列表<span class="head-badge">演示任务置顶 · 创建时间降序 · 进度实时跳动</span></div>
     <table class="report-table res-table-wrap" style="margin-bottom:28px">
       <thead><tr><th>TRN_ID</th><th>任务</th><th>类型</th><th>数据集</th><th>资源</th><th>进度</th><th>状态</th><th></th></tr></thead>
       <tbody>${ordered.filter((t) => t.status !== 'done').map((t) => {
         const i = trnState.tasks.indexOf(t);
         return `
         <tr>
-          <td class="mono small">${t.id}${t.pinned ? ' <span class="badge badge-primary">置顶</span>' : ''}</td>
+          <td class="mono small">${t.id}${t.pinned ? ' <span class="badge badge-primary">演示任务</span>' : ''}</td>
           <td><div style="font-weight:500">${esc(t.name)}</div><div class="small muted">${esc(t.goal)}</div></td>
           <td><span class="badge badge-primary">${t.type.split(' ')[0]}</span></td>
           <td class="small">${esc(t.dataset)}</td>
@@ -6284,14 +6309,14 @@ function renderTraining() {
       </tbody>
     </table>
 
-    <div class="history-head">已完成任务列表<span class="head-badge">${cnt('done')} 个 · 已完成置顶 · 可查看 Checkpoint</span></div>
+    <div class="history-head">已完成任务列表<span class="head-badge">${cnt('done')} 个 · 可查看 Checkpoint</span></div>
     <table class="report-table res-table-wrap">
       <thead><tr><th>TRN_ID</th><th>任务</th><th>类型</th><th>数据集</th><th>资源</th><th>进度</th><th>状态</th><th></th></tr></thead>
       <tbody>${ordered.filter((t) => t.status === 'done').map((t) => {
         const i = trnState.tasks.indexOf(t);
         return `
         <tr>
-          <td class="mono small">${t.id}${t.pinned ? ' <span class="badge badge-primary">置顶</span>' : ''}</td>
+          <td class="mono small">${t.id}${t.pinned ? ' <span class="badge badge-primary">演示任务</span>' : ''}</td>
           <td><div style="font-weight:500">${esc(t.name)}</div><div class="small muted">${esc(t.goal)}</div></td>
           <td><span class="badge badge-primary">${t.type.split(' ')[0]}</span></td>
           <td class="small">${esc(t.dataset)}</td>
