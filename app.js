@@ -4333,6 +4333,18 @@ const tw = {
   protocol: 'openai_responses', harness: 'codex', keyId: 'key-01',
   constraints: { duration: 45, token: 20, tools: 60, cost: 200 },
 };
+
+/* 模型 / Agent 自带接入参数（TT-05：选中即自动匹配，无需用户选择） */
+const MODEL_IO = {
+  'gpt-4o':       ['openai_chat', 'codex'],
+  'claude-4':     ['anthropic_messages', 'claude_code'],
+  'qwen25-72b':   ['openai_chat', 'codex'],
+  'mythos-chat-v1': ['openai_responses', 'codex'],
+  'ext-glm52':    ['openai_chat', 'codex'],
+  'ext-gpt54':    ['openai_responses', 'codex'],
+  'ext-claude':   ['anthropic_messages', 'claude_code'],
+};
+const modelIo = (id) => MODEL_IO[id] || ['openai_responses', 'codex'];
 function openTaskWizard() {
   tw.step = 1;
   openModal(`
@@ -4440,6 +4452,7 @@ function renderTw2() {
     /* TT-05/06 · 内置托管 / 外部接入 + 接入参数 */
     const pool = tw.modelTab === 'builtin' ? BUILTIN_MODELS : EXT_AGENTS.filter((a) => a.verified);
     if (!pool.some((o) => o.id === tw.modelId)) tw.modelId = pool[0] ? pool[0].id : '';
+    if (tw.modelId) [tw.protocol, tw.harness] = modelIo(tw.modelId);
     const keys = gwKeys().filter((k) => k.status === 'active');
     if (!keys.some((k) => k.id === tw.keyId)) tw.keyId = keys[0] ? keys[0].id : '';
     body.innerHTML = `
@@ -4449,18 +4462,17 @@ function renderTw2() {
         <button class="tab-btn ${tw.modelTab === 'external' ? 'active' : ''}" data-tw2tab="external">外部接入（网关校验成功）</button>
       </div>
       <select class="select" id="tw2-model">${pool.map((o) => `<option value="${o.id}" ${tw.modelId === o.id ? 'selected' : ''}>${o.name} · ${o.tag || o.kind}</option>`).join('')}</select>
-      <p class="mini-note">${tw.modelTab === 'external' ? '仅展示已在接入网关通过校验的外部对象' : '内置模型与 Agent 为平台托管固定选项，可自定义接入模式和参数'}</p>
+      <p class="mini-note">${tw.modelTab === 'external' ? '仅展示已在接入网关通过校验的外部对象' : '内置模型与 Agent 为平台托管固定选项，接入参数随所选对象自动匹配'}</p>
     </div>
-    <div class="wz-field"><span class="field-label">接入协议 protocol（三选一）</span>
-      ${chips('tw2-proto', [{ v: 'openai_responses', t: 'openai_responses' }, { v: 'openai_chat', t: 'openai_chat' }, { v: 'anthropic_messages', t: 'anthropic_messages' }], tw.protocol)}</div>
-    <div class="wz-field"><span class="field-label">Agent 框架 harness（二选一）</span>
-      ${chips('tw2-harness', [{ v: 'codex', t: 'codex' }, { v: 'claude_code', t: 'claude_code' }], tw.harness)}</div>
+    <div class="wz-field"><span class="field-label">接入参数（随所选模型 / Agent 自动匹配，无需手动选择）</span>
+      <dl class="detail-kv">
+        <dt>接入协议 protocol</dt><dd class="mono">${tw.protocol}</dd>
+        <dt>Agent 框架 harness</dt><dd class="mono">${tw.harness}</dd>
+      </dl></div>
     <div class="wz-field"><span class="field-label">接入密钥（读取接入网关已创建密钥）</span>
       <select class="select" id="tw2-key">${keys.map((k) => `<option value="${k.id}" ${tw.keyId === k.id ? 'selected' : ''}>${esc(k.name)} · ${k.prefix}…</option>`).join('')}</select></div>`;
     $$('[data-tw2tab]').forEach((t) => t.addEventListener('click', () => { tw.modelTab = t.dataset.tw2tab; tw.modelId = ''; renderTw2(); }));
-    $('#tw2-model').addEventListener('change', (e) => { tw.modelId = e.target.value; });
-    bindChips('tw2-proto', (v) => { tw.protocol = v; });
-    bindChips('tw2-harness', (v) => { tw.harness = v; });
+    $('#tw2-model').addEventListener('change', (e) => { tw.modelId = e.target.value; [tw.protocol, tw.harness] = modelIo(tw.modelId); renderTw2(); });
     $('#tw2-key').addEventListener('change', (e) => { tw.keyId = e.target.value; });
     return;
   }

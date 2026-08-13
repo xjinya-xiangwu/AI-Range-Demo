@@ -72,7 +72,7 @@ async function expectText(page, text, label) {
 
   await page.evaluate(() => { location.hash = '#/range-hall'; });
   await sleep(1200);
-  await expectText(page, '企业内网横向移动 · 5 网区 20 节点', '靶场大厅 SCN-01');
+  await expectText(page, 'ENT-0520 靶场', '靶场大厅 SCN-01');
   await page.screenshot({ path: 'qa-shot-rangehall.png', fullPage: false });
   shots.push('qa-shot-rangehall.png');
 

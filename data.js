@@ -1195,11 +1195,11 @@ const MODEL_LINEAGE = ['v1.0（SFT 基线）', 'v2.0（CPT 基座）', 'v2.1（�
 
 /* ── 靶场大厅 · 演示 case（RT-11 / RR-01）─────────────────────── */
 const HALL_CASES = [
-  { id: 'SCN-01', name: '企业内网横向移动 · 5 网区 20 节点', real: true,  desc: '真实接入环境：公网门户 → 应用服务器 → Redis 缓存 → 安全检测 / 内容管理双路渗透，含 14 个诱饵节点。' },
-  { id: 'SCN-02', name: '秦山核电指挥中心攻防演练',                 real: false, desc: '预置演示 case：隔离网闸 → DCS → 安全级网络渗透链。' },
-  { id: 'SCN-03', name: '城市商业银行核心网渗透',                   real: false, desc: '预置演示场景 · 接入中。' },
-  { id: 'SCN-04', name: '政务云租户隔离逃逸演练',                   real: false, desc: '预置演示场景 · 接入中。' },
-  { id: 'SCN-05', name: '轨道交通信号系统攻防',                     real: false, desc: '预置演示场景 · 接入中。' },
+  { id: 'SCN-01', name: 'ENT-0520 靶场', real: true,  desc: '真实接入环境：公网门户 → 应用服务器 → Redis 缓存 → 安全检测 / 内容管理双路渗透，含 14 个诱饵节点。' },
+  { id: 'SCN-02', name: 'ENG-0416 靶场',                 real: false, desc: '预置演示 case：隔离网闸 → DCS → 安全级网络渗透链。' },
+  { id: 'SCN-03', name: 'FIN-0418 靶场',                   real: false, desc: '预置演示场景 · 接入中。' },
+  { id: 'SCN-04', name: 'GOV-0415 靶场',                   real: false, desc: '预置演示场景 · 接入中。' },
+  { id: 'SCN-05', name: 'TRN-0414 靶场',                     real: false, desc: '预置演示场景 · 接入中。' },
 ];
 
 
