@@ -627,8 +627,8 @@ const SIM_RUNS = [
 
 /* ── 任务中心 · 运行中队列（创建时间降序 · 置顶演示任务在前）────── */
 const TASK_QUEUE = [
-  { job: 'JOB-20260806-021', scene: 'SCN-01 · 企业内网（5 网区 20 节点）', suite: '靶场环境评测', agent: 'Mythos-Attack-v2', conc: 8,  progress: 72, status: 'running', created: '2026-08-06 14:52', pin: true, simIdx: 0 },
-  { job: 'JOB-20260806-020', scene: 'SCN-01 · 企业内网 · GPT-5.4 外部接入', suite: '靶场环境评测', agent: '外部模型 · GPT-5.4', conc: 12, progress: 55, status: 'running', created: '2026-08-06 14:31', pin: false, simIdx: 1 },
+  { job: 'JOB-20260806-021', scene: 'SCN-01 · 企业内网（5 网区 20 节点）', suite: '靶场环境评测', agent: 'Mythos-Attack-v2', conc: 1,  progress: 72, status: 'running', created: '2026-08-06 14:52', pin: true, simIdx: 0 },
+  { job: 'JOB-20260806-020', scene: 'SCN-01 · 企业内网 · GPT-5.4 外部接入', suite: '靶场环境评测', agent: '外部模型 · GPT-5.4', conc: 1, progress: 55, status: 'running', created: '2026-08-06 14:31', pin: false, simIdx: 1 },
   { job: 'JOB-20260806-019', scene: 'ExploitGym t3 利用链',      suite: '纯代码评测',   agent: 'Mythos-Attack-v2', conc: 8,  progress: 91, status: 'running', created: '2026-08-06 13:58', simIdx: null },
   { job: 'JOB-20260806-018', scene: 'CyberGym 漏洞挖掘',         suite: '纯代码评测',   agent: 'ReconX',           conc: 8,  progress: 34, status: 'running', created: '2026-08-06 13:20', simIdx: null },
   { job: 'JOB-20260806-017', scene: 'PatchEval 修复评测',        suite: '纯代码评测',   agent: 'Sentinel-7B',      conc: 4,  progress: 0,  status: 'queued',  created: '2026-08-06 12:47', simIdx: null },

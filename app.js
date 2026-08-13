@@ -325,7 +325,6 @@ function renderDoneGrid() {
         <span>${esc(executorLabel(rec))}</span>
       </div>
       <div class="env-actions">
-        <button class="btn btn-ghost btn-sm" data-again="${t.id}">再次启动</button>
         <button class="btn btn-outline btn-sm" data-report2="${t.id}">查看报告</button>
       </div>
     </div>`;
@@ -535,7 +534,7 @@ function rangeSectionHtml(sceneKey, mode) {
             <div class="hud-row"><span class="hud-k">智能体</span><button class="hud-step" id="ep-ag-minus">−</button><span class="hud-v" id="ep-agents-v">${ctl.agentN}</span><button class="hud-step" id="ep-ag-plus">＋</button></div>
             <div class="hud-row"><span class="hud-k">阈值</span><input type="range" id="ep-th" min="50" max="90" step="5" value="${ctl.alertTh}"><span class="hud-v" id="ep-th-v">${ctl.alertTh}%</span></div>
             <span class="hud-spacer"></span>
-            <div class="hud-row"><button class="btn btn-primary btn-sm" id="rg-pause">${ctl.paused ? '继续演练' : '暂停演练'}</button><button class="btn btn-outline btn-sm" id="rg-reset">重置环境</button></div>
+            <div class="hud-row"><button class="btn btn-outline btn-sm" id="rg-reset">重置环境</button></div>
           </div>
         </div>
       </div>`;
@@ -915,7 +914,6 @@ function bindRangeHud(sceneKey) {
   };
   $('#ep-ag-minus').addEventListener('click', () => stepAgent(-1));
   $('#ep-ag-plus').addEventListener('click', () => stepAgent(1));
-  $('#rg-pause').addEventListener('click', () => togglePauseRange(sceneKey));
   $('#rg-reset').addEventListener('click', () => resetRange(sceneKey));
 }
 function togglePauseRange(sceneKey) {
@@ -1465,7 +1463,7 @@ function renderWorkbench() {
     run.category === 'eval'
       ? `${esc(meta.objectLabel)} 评测执行中 · 逐项风险检测`
       : run.category === 'redblue'
-        ? `${esc(run.meta.agentName)} 自主执行中 · 用户观察模式（可随时暂停 / 结束干预）`
+        ? `${esc(run.meta.agentName)} 自主执行中 · 用户观察模式（仅观察 · 可结束干预）`
         : `${esc(run.meta.agentName)} 业务执行中 · 风险观察模式（越权/泄露/合规实时观测）`
   }</div>`;
 
@@ -1527,7 +1525,6 @@ function renderWorkbench() {
       </div>
       <div class="wb-actions">
         <a class="btn btn-ghost btn-sm" href="#/tasks" style="align-self:center">‹ 返回测试任务</a>
-        <button class="btn btn-outline btn-sm" id="btn-pause">暂停</button>
         <button class="btn btn-destructive btn-sm" id="btn-end">结束挑战</button>
       </div>
     </div>
@@ -1625,7 +1622,6 @@ function renderWorkbench() {
     el.textContent = `引擎健康度 ${h}% · 算力占用 ${c}% · 轮询 ${fmtClock(new Date())}`;
   }, 30000);
 
-  $('#btn-pause').addEventListener('click', togglePause);
   $('#btn-end').addEventListener('click', () => settle(false));
 
   /* 终端输入（仅红蓝人工模式） */
@@ -3176,7 +3172,6 @@ function renderDashboard() {
           ${OV_LEADERBOARD.map((m) => `
           <div class="lb-row"><span class="lb-rank">${m.rank}</span><span class="lb-name">${m.name}</span>
             <span class="lb-tag">${m.tag}</span><span class="lb-score">${m.score.toFixed(1)}</span><span class="lb-delta">${m.delta}</span></div>`).join('')}
-          <div style="margin-top:8px;text-align:right"><a class="small" href="#/models" style="color:var(--primary);text-decoration:none">模型中心 →</a></div>
         </div>
         <div class="card dash-card">
           <div class="dc-head"><span class="dc-title">Agent 能力维度雷达</span><span class="dc-sub">当前 vs 基线</span></div>
@@ -3354,12 +3349,6 @@ function renderCollaborate() {
       <div class="jf-stage"><div class="jf-name">终审归档</div><div class="jf-desc">WORM 只读 · 不可篡改 · 保留 180 天</div></div>
     </div>
 
-    <div class="judge-stats">
-      <div class="card"><div class="card-sub">待复审工单</div><div class="stat-num" style="color:var(--chart-4)">${open}</div></div>
-      <div class="card"><div class="card-sub">本周已办结</div><div class="stat-num">${JUDGE_STATS.doneWeek + judgeState.tickets.filter((t) => t.status === 'done').length - 2}</div></div>
-      <div class="card"><div class="card-sub">平均复审耗时</div><div class="stat-num">${JUDGE_STATS.avgHours}</div></div>
-      <div class="card"><div class="card-sub">高置信直通占比</div><div class="stat-num">${JUDGE_STATS.directPct}%</div></div>
-    </div>
 
     <!-- ① 研判工单队列 -->
     <div class="history-head">研判工单队列<span class="head-badge">每页 ${per} 条 · 点击工单查看详情</span></div>
@@ -3623,7 +3612,7 @@ function trnTaskCard(t, i) {
         <button class="btn btn-ghost btn-sm" data-trn="stop:${i}" style="color:var(--destructive)">终止废弃</button>
         <button class="btn btn-outline btn-sm" data-trn="live:${i}">实时监控</button>` : ''}
       ${t.status === 'evaluating' ? '<span class="mini-note" style="margin:0">门禁评估中：自动基准评测 → 门禁 → 发布</span>' : ''}
-      ${t.status === 'done' ? '<button class="btn btn-outline btn-sm" data-trn="ckpt:' + i + '">查看 Checkpoint</button>' : ''}
+      
     </div>
   </div>`;
 }
@@ -3640,13 +3629,6 @@ function renderTraining() {
         <p class="page-desc">创建并管理模型训练任务 · 5 步向导配置 · 实时跟踪训练进度与结果</p>
       </div>
       <button class="btn btn-primary" id="trn-new">新建训练任务</button>
-    </div>
-    <div class="stats-row" style="grid-template-columns:repeat(5,1fr)">
-      <div class="card"><div class="card-sub">任务总数</div><div class="stat-num">${trnState.tasks.length}</div></div>
-      <div class="card"><div class="card-sub">运行中</div><div class="stat-num" style="color:var(--primary)">${cnt('running')}</div></div>
-      <div class="card"><div class="card-sub">排队中</div><div class="stat-num" style="color:var(--chart-4)">${cnt('queued')}</div></div>
-      <div class="card"><div class="card-sub">已完成</div><div class="stat-num" style="color:var(--chart-3)">${cnt('done')}</div></div>
-      <div class="card"><div class="card-sub">本周新版本</div><div class="stat-num">${TRN_WEEK_NEW_VERSIONS}</div></div>
     </div>
 
     <!-- TR-02a 训练流水线五阶段导航 -->
@@ -3671,10 +3653,8 @@ function renderTraining() {
   $$('[data-trn]').forEach((b) => b.addEventListener('click', () => {
     const [act, idx] = b.dataset.trn.split(':');
     const t = trnState.tasks[Number(idx)];
-    if (act === 'pause') showToast(`已暂停 ${t.id} · 任务仅可暂停 / 终止，不可修改`);
-    else if (act === 'stop') { t.status = 'done'; t.pinned = false; showToast(`${t.id} 已终止废弃`); renderTraining(); }
+    if (act === 'stop') { t.status = 'done'; t.pinned = false; showToast(`${t.id} 已终止废弃`); renderTraining(); }
     else if (act === 'live') location.hash = '#/training-live';
-    else if (act === 'ckpt') location.hash = '#/models';
   }));
 
   /* 进度定时跳动（TR-02） */
@@ -4531,6 +4511,18 @@ function submitTaskWizard() {
   cfg.constraints = { ...c };
   cfg.protocol = tw.protocol; cfg.harness = tw.harness;
   closeModal();
+  /* 本期约束：纯代码评测缺乏必要评测集，提交即返回失败弹窗（不进入队列） */
+  if (tw.type === 'eval') {
+    openModal(`
+    <div class="modal-title serif">任务创建失败，缺乏必要评测集</div>
+    <div class="modal-sub mono" style="color:var(--destructive)">评测任务 · 提交未受理</div>
+    <div class="modal-body"><p class="small">纯代码评测任务需要可用的测试题集才能运行。当前缺乏必要评测集，请联系管理员在「数据中心 · 测试题集管理」上传维护题集后重新提交。</p></div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="tw2-fail-ok">返回任务列表</button>
+    </div>`);
+    $('#tw2-fail-ok').addEventListener('click', () => { closeModal(); location.hash = '#/tasks'; });
+    return;
+  }
   /* TT-08 · 提交成功弹窗 + 进入运行中队列 */
   sessionStorage.setItem('aisr-runCfg', JSON.stringify(cfg));
   sessionStorage.setItem('aisr-running', '1');
@@ -4560,12 +4552,6 @@ function judgeBlockHtml() {
       <div class="jf-stage"><div class="jf-name">自动初审</div><div class="jf-desc">评分器 · 秒级 · 高置信 ≥95% 直通归档（约 62%）</div></div>
       <div class="jf-stage"><div class="jf-name">人工复审</div><div class="jf-desc">专家 + AI 研判建议 · 低置信 / 争议工单进入队列</div></div>
       <div class="jf-stage"><div class="jf-name">终审归档</div><div class="jf-desc">WORM 只读 · 不可篡改 · 保留 180 天</div></div>
-    </div>
-    <div class="judge-stats">
-      <div class="card"><div class="card-sub">待复审工单</div><div class="stat-num" style="color:var(--chart-4)">${open}</div></div>
-      <div class="card"><div class="card-sub">本周已办结</div><div class="stat-num">${JUDGE_STATS.doneWeek + judgeState.tickets.filter((t) => t.status === 'done').length - 2}</div></div>
-      <div class="card"><div class="card-sub">平均复审耗时</div><div class="stat-num">${JUDGE_STATS.avgHours}</div></div>
-      <div class="card"><div class="card-sub">高置信直通占比</div><div class="stat-num">${JUDGE_STATS.directPct}%</div></div>
     </div>
     <div class="card" style="padding:0">
       ${judgeState.tickets.map((t, i) => ticketHtml(t, i)).join('')}
@@ -4741,7 +4727,7 @@ function renderConfirm() {
     ${backLink('#/tasks', '测试任务')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">结果确认 ${helpTip('在这里完成测试结果的确认与报告产出：先在「协同研判」逐条办结待确认的风险点工单（确认 / 改判 / 驳回），全部办结后即可生成评测报告；下方报告任务列表支持查看报告、结果分析与批量导出。')}</h2>
+        <h2 class="page-title">结果确认 ${helpTip('在这里完成测试结果的确认与报告产出：先在「协同研判」逐条办结待确认的风险点工单（确认 / 改判 / 驳回），全部办结后即可生成评测报告；下方报告任务列表支持查看报告与批量导出。')}</h2>
         <p class="page-desc">研判办结 → 生成报告 → 查看与分析，一站完成</p>
       </div>
       <span class="badge badge-gold">待复审 ${judgeOpenCount()} 条</span>
@@ -4766,7 +4752,6 @@ function renderConfirm() {
           </div>
           <div class="tk-actions">
             <button class="btn btn-outline btn-sm" data-rpt-view="${t.id}">查看报告</button>
-            <button class="btn btn-ghost btn-sm" data-rpt-ana="${t.id}">结果分析</button>
             <span class="tk-state small muted mono">${new Date(rec.endedAt).toLocaleDateString('zh-CN')} 完成 · ${esc(executorLabel(rec))}</span>
           </div>
         </div>`;
@@ -4788,10 +4773,6 @@ function renderConfirm() {
     e.stopPropagation();
     const t = tasks.find((x) => x.id === b.dataset.rptView);
     reportViewModal(synthRecord(t), t.id);
-  }));
-  $$('[data-rpt-ana]').forEach((b) => b.addEventListener('click', (e) => {
-    e.stopPropagation();
-    openAnalysisModal(b.dataset.rptAna);
   }));
   $('#rpt-batch').addEventListener('click', () => {
     if (!confirmState.checked.size) { showToast('请先勾选要导出的报告'); return; }
@@ -4871,7 +4852,7 @@ function renderSettings() {
     ${backLink('#/dashboard', '态势感知')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">个人中心 ${helpTip('管理你的账号：个人资料、安全设置（密码 / 双因子）、登录与操作记录、我的 API 密钥（与接入网关同源）。')}</h2>
+        <h2 class="page-title">个人中心 ${helpTip('管理你的账号：个人资料、安全设置（密码）、登录与操作记录、我的 API 密钥（与接入网关同源）。')}</h2>
         <p class="page-desc">个人资料 / 安全设置 / 登录与操作记录 / 我的 API 密钥 / 退出登录 · SSO 账号 operator@aisr.lab</p>
       </div>
       <button class="btn btn-outline" id="st-logout">退出登录</button>
@@ -4892,7 +4873,6 @@ function renderSettings() {
       <div class="card">
         <div class="card-title" style="margin-bottom:10px">安全设置</div>
         <div class="dc-kv"><span class="k">登录密码</span><span class="v"><a style="color:var(--primary);cursor:pointer" id="st-pwd">跳转 SSO 修改 →</a></span></div>
-        <div class="dc-kv"><span class="k">双因子认证 MFA</span><span class="v" style="color:var(--chart-3)">已启用 · TOTP</span></div>
         <div class="dc-kv"><span class="k">登录提醒</span><span class="v">非常用终端登录时邮件提醒</span></div>
         <div class="dc-kv"><span class="k">会话策略</span><span class="v">12 小时无操作自动登出</span></div>
       </div>
@@ -5378,14 +5358,10 @@ function renderRangeHall() {
         </div>
         <div class="env-title">${esc(c.name)}</div>
         <div class="env-desc">${esc(c.desc)}</div>
-        <div class="env-badges">${(d.agents || []).map((a) => `<span class="chip">${esc(a)}</span>`).join('')}</div>
         <div class="env-meta" style="border:none;padding-top:0">
-          <span class="mono">${d.nets || ''}</span>
-          <span>${d.images || ''}</span>
-          <span>${d.warm || ''}</span>
-        </div>
-        <div class="jd-replay" style="margin:2px 0 0">
-          ${(d.stages || []).map((s, i) => `<div class="jd-ms${i === 0 ? ' done' : ''}">${s}</div>`).join('')}
+          <span>内部网络 <b class="mono">${((d.nets || '').match(/\d+/) || ['—'])[0]}</b></span>
+          <span>Compose 服务节点 <b class="mono">${((d.images || '').match(/\d+/) || ['—'])[0]}</b></span>
+          <span>Scored milestones <b class="mono">${(d.stages || []).length || '—'}</b></span>
         </div>
         <div class="env-actions" style="margin-top:auto">
           <button class="btn btn-outline btn-sm" data-hall-use="${c.id}" ${usable ? '' : 'disabled title="场景接入中"'}>使用该环境创建任务</button>
@@ -5956,11 +5932,10 @@ function renderTasks() {
       <td style="font-weight:500">${esc(title)}</td>
       <td class="small">${cfg && cfg.category === 'eval' ? '纯代码评测' : '靶场环境评测'}</td>
       <td class="small">${esc((cfg && cfg.agentId) || 'Mythos-Attack-v2')}</td>
-      <td class="num">8</td>
+      <td class="num">${cfg && cfg.category === 'eval' ? '8' : '1'}</td>
       <td><div class="prog-track" style="min-width:110px"><div class="prog-fill indet"></div></div></td>
       <td>${tqStatusBadge('running')}</td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="btn btn-ghost btn-sm" data-tq-pause>暂停</button>
         <button class="btn btn-ghost btn-sm" data-tq-stop style="color:var(--destructive)">终止</button>
         <button class="btn btn-outline btn-sm" data-tq-detail="user">详情</button>
       </td>
@@ -5977,7 +5952,7 @@ function renderTasks() {
       <td><div style="display:flex;align-items:center;gap:8px"><div class="prog-track" style="min-width:110px;flex:1"><div class="prog-fill" style="width:${t.progress}%"></div></div><span class="mono small">${t.progress}%</span></div></td>
       <td>${tqStatusBadge(t.status)}</td>
       <td style="text-align:right;white-space:nowrap">
-        ${t.status === 'running' ? '<button class="btn btn-ghost btn-sm" data-tq-pause>暂停</button><button class="btn btn-ghost btn-sm" data-tq-stop style="color:var(--destructive)">终止</button>' : '<button class="btn btn-ghost btn-sm" data-tq-cancel>取消</button>'}
+        ${t.status === 'running' ? '<button class="btn btn-ghost btn-sm" data-tq-stop style="color:var(--destructive)">终止</button>' : '<button class="btn btn-ghost btn-sm" data-tq-cancel>取消</button>'}
         <button class="btn btn-outline btn-sm" data-tq-detail="${t.job}">详情</button>
       </td>
     </tr>`).join('');
@@ -5993,10 +5968,8 @@ function renderTasks() {
       <td class="small">${catShort(rec.category)}</td>
       <td class="small">${esc(executorLabel(rec))}</td>
       <td class="num" style="font-weight:600">${rec.score}</td>
-      <td><span class="badge ${rec.verdictClass === 'v-olive' ? 'badge-olive' : rec.verdictClass === 'v-gold' ? 'badge-gold' : 'badge-destructive'}">${rec.verdict}</span></td>
       <td class="small muted mono">${new Date(rec.endedAt).toLocaleDateString('zh-CN')}</td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="btn btn-ghost btn-sm" data-again="${t.id}">再次启动</button>
         <button class="btn btn-outline btn-sm" data-report2="${t.id}">查看报告</button>
       </td>
     </tr>`;
@@ -6011,12 +5984,6 @@ function renderTasks() {
         <p class="page-desc">测试任务的创建、队列与结果总览 · 评测任务 / 靶场任务统一入口</p>
       </div>
       <button class="btn btn-primary" id="btn-new-task">新建测试任务</button>
-    </div>
-    <div class="stats-row">
-      <div class="card"><div class="card-sub">运行中</div><div class="stat-num" style="color:var(--primary)">${runningN}</div></div>
-      <div class="card"><div class="card-sub">排队中</div><div class="stat-num" style="color:var(--chart-4)">${queuedN}</div></div>
-      <div class="card"><div class="card-sub">今日完成</div><div class="stat-num" style="color:var(--chart-3)">417</div></div>
-      <div class="card"><div class="card-sub">累计任务</div><div class="stat-num">2,103</div></div>
     </div>
 
     <div class="history-head head-row">
@@ -6034,7 +6001,7 @@ function renderTasks() {
 
     <div class="history-head">已完成任务列表<span class="head-badge">${doneTasks.length} 个 · 点击「查看报告」前往结果确认</span></div>
     <table class="report-table res-table-wrap">
-      <thead><tr><th>JOB_ID</th><th>任务</th><th>类型</th><th>执行体</th><th class="num">得分</th><th>结论</th><th>完成时间</th><th></th></tr></thead>
+      <thead><tr><th>JOB_ID</th><th>任务</th><th>类型</th><th>执行体</th><th class="num">得分</th><th>完成时间</th><th></th></tr></thead>
       <tbody>${doneRows}</tbody>
     </table>
   </div>`;
@@ -6046,19 +6013,10 @@ function renderTasks() {
     if (b.dataset.tqDetail === 'user') { location.hash = '#/workbench'; return; }
     openQueueTask(TASK_QUEUE.find((t) => t.job === b.dataset.tqDetail));
   }));
-  $$('[data-tq-pause]').forEach((b) => b.addEventListener('click', () => showToast('已暂停（演示）')));
   $$('[data-tq-stop]').forEach((b) => b.addEventListener('click', () => showToast('已终止（演示）')));
   $$('[data-tq-cancel]').forEach((b) => b.addEventListener('click', () => showToast('已取消排队（演示）')));
   const openReport = (id) => { confirmState.sel = id; location.hash = '#/confirm'; };
   $$('[data-report2]').forEach((b) => b.addEventListener('click', () => openReport(b.dataset.report2)));
-  $$('[data-again]').forEach((b) => b.addEventListener('click', () => {
-    const task = [...PRESET_RESULTS, ...HISTORY_TASKS].find((x) => x.id === b.dataset.again);
-    tw.type = task.cfg.category === 'eval' ? 'eval' : 'range';
-    if (task.cfg.simEnv) tw.envKey = task.cfg.simEnv;
-    tw.step = 1;
-    openTaskWizard();
-    showToast('已沿用历史任务配置 · 创建流程中可修改');
-  }));
 }
 
 
@@ -6101,7 +6059,6 @@ function renderDashboard() {
           ${OV_LEADERBOARD.map((m) => `
           <div class="lb-row"><span class="lb-rank">${m.rank}</span><span class="lb-name">${m.name}</span>
             <span class="lb-tag">${m.tag}</span><span class="lb-score">${m.score.toFixed(1)}</span><span class="lb-delta">${m.delta}</span></div>`).join('')}
-          <div style="margin-top:8px;text-align:right"><a class="small" href="#/models" style="color:var(--primary);text-decoration:none">模型中心 →</a></div>
         </div>
         <div class="card dash-card">
           <div class="dc-head"><span class="dc-title">Agent 能力维度雷达</span><span class="dc-sub">当前 vs 基线</span></div>
@@ -6121,7 +6078,6 @@ function renderDashboard() {
           <div class="dc-kv"><span class="k">ppo_kl</span><span class="v" id="ov-kl">${OV_TRAIN_LIVE.ppoKl.toFixed(3)}</span></div>
           <div class="hp-mini">${DASH_CTRL.hp.map(([k, v]) => `<span class="hp-cell"><i>${k}</i><b>${v}</b></span>`).join('')}</div>
           <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-outline btn-sm" id="ov-train-card">暂停</button>
             <button class="btn btn-outline btn-sm" id="dp-ctl-go">继续</button>
             <button class="btn btn-ghost btn-sm" id="dp-ctl-stop" style="color:var(--destructive)">停止</button>
             <span style="flex:1"></span>
@@ -6226,7 +6182,6 @@ function renderDashboard() {
     dashState.paused = !dashState.paused;
     $('#dc-pause').textContent = dashState.paused ? '▶ 继续轮播' : '❙❙ 暂停轮播';
   });
-  $('#ov-train-card').addEventListener('click', () => showToast('训练已暂停（演示）'));
   $('#dp-ctl-go').addEventListener('click', () => showToast('训练继续（演示）'));
   $('#dp-ctl-stop').addEventListener('click', () => showToast('停止需二次确认 · 演示环境已拦截'));
   /* 终端预警流（2s 一拍） */
@@ -6256,17 +6211,10 @@ function renderTraining() {
     ${backLink('#/dashboard', '态势感知')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：5 步向导创建训练任务；置顶的演示任务与态势感知首页的训练面板同源，点击「实时监控」可查看训练大屏；列表实时展示运行 / 排队 / 完成 / 评估状态，可暂停或终止。')}</h2>
+        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：5 步向导创建训练任务；置顶的演示任务与态势感知首页的训练面板同源，点击「实时监控」可查看训练大屏；列表实时展示运行 / 排队 / 完成 / 评估状态，可终止，不可修改。')}</h2>
         <p class="page-desc">训练任务的创建、调度与结果总览 · 进度实时跳动</p>
       </div>
       <button class="btn btn-primary" id="trn-new">新建训练任务</button>
-    </div>
-    <div class="stats-row" style="grid-template-columns:repeat(5,1fr)">
-      <div class="card"><div class="card-sub">任务总数</div><div class="stat-num">${trnState.tasks.length}</div></div>
-      <div class="card"><div class="card-sub">运行中</div><div class="stat-num" style="color:var(--primary)">${cnt('running')}</div></div>
-      <div class="card"><div class="card-sub">排队中</div><div class="stat-num" style="color:var(--chart-4)">${cnt('queued')}</div></div>
-      <div class="card"><div class="card-sub">已完成</div><div class="stat-num" style="color:var(--chart-3)">${cnt('done')}</div></div>
-      <div class="card"><div class="card-sub">本周新版本</div><div class="stat-num">${TRN_WEEK_NEW_VERSIONS}</div></div>
     </div>
 
     <div class="history-head">训练流水线<span class="head-badge">点击阶段查看说明</span></div>
@@ -6297,19 +6245,18 @@ function renderTraining() {
           <td><span class="badge ${TRN_STATUS_CLS[t.status]}">${TRN_STATUS_CN[t.status]}</span></td>
           <td style="text-align:right;white-space:nowrap">
             ${t.status === 'running' ? `
-              <button class="btn btn-ghost btn-sm" data-trn="pause:${i}">暂停</button>
               <button class="btn btn-ghost btn-sm" data-trn="stop:${i}" style="color:var(--destructive)">终止</button>
               <button class="btn btn-outline btn-sm" data-trn="live:${i}">实时监控</button>` : ''}
             ${t.status === 'queued' ? '<button class="btn btn-ghost btn-sm" data-trn="stop:' + i + '">取消排队</button>' : ''}
             ${t.status === 'evaluating' ? '<span class="mini-note" style="margin:0">门禁评估中</span>' : ''}
-            ${t.status === 'done' ? '<button class="btn btn-outline btn-sm" data-trn="ckpt:' + i + '">查看 Checkpoint</button>' : ''}
+            
           </td>
         </tr>`;
       }).join('') || '<tr><td colspan="8" class="small muted" style="text-align:center;padding:20px">暂无运行中 / 排队任务</td></tr>'}
       </tbody>
     </table>
 
-    <div class="history-head">已完成任务列表<span class="head-badge">${cnt('done')} 个 · 可查看 Checkpoint</span></div>
+    <div class="history-head">已完成任务列表<span class="head-badge">${cnt('done')} 个</span></div>
     <table class="report-table res-table-wrap">
       <thead><tr><th>TRN_ID</th><th>任务</th><th>类型</th><th>数据集</th><th>资源</th><th>进度</th><th>状态</th><th></th></tr></thead>
       <tbody>${ordered.filter((t) => t.status === 'done').map((t) => {
@@ -6327,7 +6274,7 @@ function renderTraining() {
             <div class="small muted mono">step ${t.totalStep.toLocaleString()} / ${t.totalStep.toLocaleString()}</div></td>
           <td><span class="badge ${TRN_STATUS_CLS[t.status]}">${TRN_STATUS_CN[t.status]}</span></td>
           <td style="text-align:right;white-space:nowrap">
-            <button class="btn btn-outline btn-sm" data-trn="ckpt:${i}">查看 Checkpoint</button>
+            <span class="mini-note" style="margin:0">已归档</span>
           </td>
         </tr>`;
       }).join('') || '<tr><td colspan="8" class="small muted" style="text-align:center;padding:20px">暂无已完成任务</td></tr>'}
@@ -6344,10 +6291,8 @@ function renderTraining() {
   $$('[data-trn]').forEach((b) => b.addEventListener('click', () => {
     const [act, idx] = b.dataset.trn.split(':');
     const t = trnState.tasks[Number(idx)];
-    if (act === 'pause') showToast(`已暂停 ${t.id} · 任务仅可暂停 / 终止，不可修改`);
-    else if (act === 'stop') { t.status = 'done'; t.pinned = false; showToast(`${t.id} 已终止废弃`); renderTraining(); }
+    if (act === 'stop') { t.status = 'done'; t.pinned = false; showToast(`${t.id} 已终止废弃`); renderTraining(); }
     else if (act === 'live') location.hash = '#/training-live';
-    else if (act === 'ckpt') location.hash = '#/models';
   }));
 
   /* 进度定时跳动 */
