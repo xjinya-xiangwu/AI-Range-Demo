@@ -79,7 +79,7 @@ const NAV_OF = {
   dashboard: 'dashboard',
   tasks: 'tasks', workbench: 'tasks',
   'range-hall': 'range-hall', range: 'range-hall', 'range-detail': 'range-hall',
-  confirm: 'confirm',
+  confirm: 'tasks',
   training: 'training', 'training-live': 'training', models: 'models',
   battle: 'battle',
   data: 'data',
@@ -116,7 +116,7 @@ function router() {
   else if (r === 'tasks') renderTasks();
   else if (r === 'range-hall') renderRangeHall();
   else if (r === 'range-detail') renderRangeDetail(params.env || 'SCN-01');
-  else if (r === 'confirm') renderConfirm();
+  else if (r === 'confirm') renderTasks();
   else if (r === 'training') renderTraining();
   else if (r === 'training-live') renderTrainingLive();
   else if (r === 'models') renderModels();
@@ -3694,7 +3694,7 @@ function openTrainingWizard() {
     cfg: {
       name: 'TRN-2026-0415 渗透链智能体 RL 训练', priority: 'P1 高', type: 'RL 强化学习', desc: '',
       dataset: TRN_DATASETS[0], benchmarks: ['ExploitGym'], split: '8 : 2',
-      base: '自研 v2.2', framework: '自研 RL 框架', rlAlgo: 'GRPO', finetune: 'LoRA（推荐）',
+      base: '自研 v2.2', framework: '自研 RL 框架', rlAlgo: 'GRPO',
       gpu: '8×H100', duration: '24 小时',
       hp: Object.fromEntries(TRN_HP_DEFS.map(([k, , dft]) => [k, dft])),
     },
@@ -3775,12 +3775,10 @@ function renderTwiz() {
       (c.framework === '自研 RL 框架'
         ? field('RL 算法', chips('tw-algo', TRN_RL_ALGOS, c.rlAlgo) +
             `<div class="small muted" style="margin-top:4px">自研 RL 框架支持 GRPO / PPO / GSPO 等算法，默认 GRPO</div>`)
-        : '') +
-      field('微调方式', chips('tw-ft', ['LoRA（推荐）', '全参数'], c.finetune));
+        : '');
     bindChips('tw-base', (v) => { c.base = v; });
     bindChips('tw-fw', (v) => { c.framework = v; renderTwiz(); });
     bindChips('tw-algo', (v) => { c.rlAlgo = v; });
-    bindChips('tw-ft', (v) => { c.finetune = v; });
   } else if (s === 4) {
     body.innerHTML =
       `<p class="mini-note" style="margin:0 0 12px">先确定训练资源，下一步的超参数将依据资源规模设置</p>` +
@@ -3790,9 +3788,9 @@ function renderTwiz() {
     bindChips('tw-dur', (v) => { c.duration = v; });
   } else if (s === 5) {
     body.innerHTML =
-      `<p class="mini-note" style="margin:0 0 12px">依据资源（${c.gpu}）设置 RL 训练超参数 · 每项附调优方向</p>` +
+      `<p class="mini-note" style="margin:0 0 12px">依据资源（${c.gpu}）设置 RL 训练超参数 · 每项参数旁的 ? 可查看调优方向</p>` +
       TRN_HP_DEFS.map(([k, cn, , hint]) =>
-        field(`${k}（${cn}）`, `<input class="input mono" data-hp="${k}" value="${esc(c.hp[k])}"><div class="small muted" style="margin-top:2px">${hint}</div>`)).join('');
+        field(`${k}（${cn}） ${helpTip(hint)}`, `<input class="input mono" data-hp="${k}" value="${esc(c.hp[k])}">`)).join('');
     $$('[data-hp]').forEach((x) => x.addEventListener('input', () => { c.hp[x.dataset.hp] = x.value; }));
   } else {
     body.innerHTML =
@@ -3800,7 +3798,7 @@ function renderTwiz() {
         <dl class="detail-kv">
           <dt>任务</dt><dd>${esc(c.name)} · ${c.priority} · ${c.type}</dd>
           <dt>数据</dt><dd>${esc(c.dataset)} · 基准 ${c.benchmarks.join(' / ') || '—'} · ${c.split}</dd>
-          <dt>模型</dt><dd>${c.base} · ${c.framework}${c.framework === '自研 RL 框架' ? ' · ' + c.rlAlgo : ''} · ${c.finetune}</dd>
+          <dt>模型</dt><dd>${c.base} · ${c.framework}${c.framework === '自研 RL 框架' ? ' · ' + c.rlAlgo : ''}</dd>
           <dt>资源</dt><dd>${c.gpu} · ${c.duration}</dd>
           <dt>超参</dt><dd class="mono">${TRN_HP_DEFS.map(([k]) => `${k}=${c.hp[k]}`).join(' · ')}</dd>
         </dl></div>`;
@@ -4596,7 +4594,7 @@ function submitTaskWizard() {
 /* ════════════════════════════════════════════════════════════════
  * 页面 · 结果确认（TT-12~15 · 协同研判 + 结果分析合并页，同一页面完成）
  * ════════════════════════════════════════════════════════════════ */
-const confirmState = { sel: null, checked: new Set() };
+const confirmState = { sel: null, checked: new Set(), reportReady: false };
 
 function judgeBlockHtml() {
   const open = judgeOpenCount();
@@ -4682,7 +4680,11 @@ function bindJudgeBlock(refresh) {
     $('#jd-play').addEventListener('click', () => showToast('轨迹回放为原型演示 · step 级定位将在正式版接入轨迹数据'));
   }));
   const rp = $('#jg-report');
-  if (rp) rp.addEventListener('click', () => showToast('✓ 评测报告已生成 · 已加入下方报告任务列表'));
+  if (rp) rp.addEventListener('click', () => {
+    confirmState.reportReady = true;
+    showToast('✓ 评测报告已生成 · 已解锁下方已完成任务列表');
+    refresh();
+  });
   const send = $('#inject-send');
   if (send) send.addEventListener('click', () => {
     showToast('inject 已下发 · 将于下一个 action/observation 循环生效');
@@ -6033,8 +6035,8 @@ function renderTasks() {
     ${backLink('#/dashboard', '态势感知')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">任务中心 ${helpTip('测试任务的总览与入口：置顶的演示任务基于真实靶场环境持续运行，与态势感知首页的演示场景同源，点击「详情」可查看完整运行过程；运行中队列按创建时间降序展示，下方为已完成任务列表。')}</h2>
-        <p class="page-desc">测试任务的创建、队列与结果总览 · 评测任务 / 靶场任务统一入口</p>
+        <h2 class="page-title">任务中心 ${helpTip('测试任务的总览与入口：置顶的演示任务基于真实靶场环境持续运行，与态势感知首页的演示场景同源，点击「详情」可查看完整运行过程；运行中队列按创建时间降序展示；任务跑完后，需先在「结果确认」逐条办结待确认风险点，全部办结并生成评测报告后，下方已完成任务列表才会解锁。')}</h2>
+        <p class="page-desc">测试任务的创建、队列与结果确认 · 评测任务 / 靶场任务统一入口</p>
       </div>
       <button class="btn btn-primary" id="btn-new-task">新建测试任务</button>
     </div>
@@ -6052,11 +6054,19 @@ function renderTasks() {
     </table>
     <div class="small muted" style="margin:8px 0 28px">共 ${TASK_QUEUE.length + (userRunning ? 1 : 0)} 个任务 · 显示全部</div>
 
-    <div class="history-head">已完成任务列表<span class="head-badge">${doneTasks.length} 个 · 点击「查看报告」前往结果确认</span></div>
+    <div class="history-head">结果确认 ${helpTip('任务跑完后，评测结果先进入自动初审；低置信或有争议的风险点会生成待确认工单，由你逐条确认 / 改判 / 驳回。全部工单办结后才能生成评测报告，报告生成后下方已完成任务列表解锁。')}<span class="head-badge">待确认 ${judgeOpenCount()} 项 · 全部办结后才能生成评测报告</span></div>
+    ${judgeBlockHtml()}
+
+    <div class="history-head" style="margin-top:28px">已完成任务列表<span class="head-badge">${doneTasks.length} 个 · 点击「查看报告」查看评测报告</span></div>
+    ${(confirmState.reportReady && judgeOpenCount() === 0) ? `
     <table class="report-table res-table-wrap">
       <thead><tr><th>JOB_ID</th><th>任务</th><th>类型</th><th>执行体</th><th class="num">得分</th><th>完成时间</th><th></th></tr></thead>
       <tbody>${doneRows}</tbody>
-    </table>
+    </table>` : `
+    <div class="card" style="text-align:center;padding:30px 16px">
+      <div style="font-weight:600;font-size:13px">报告与结果未解锁</div>
+      <div class="small muted" style="margin-top:6px">${judgeOpenCount() > 0 ? `尚有 ${judgeOpenCount()} 项待确认风险点 · 请在上方「结果确认」逐条办结` : '全部风险点已办结 · 点击上方「生成评测报告」'}，生成报告后即可查看已完成任务与评测报告</div>
+    </div>`}
   </div>`;
 
   $('#btn-new-task').addEventListener('click', () => openTaskWizard());
@@ -6068,8 +6078,11 @@ function renderTasks() {
   }));
   $$('[data-tq-stop]').forEach((b) => b.addEventListener('click', () => showToast('已终止（演示）')));
   $$('[data-tq-cancel]').forEach((b) => b.addEventListener('click', () => showToast('已取消排队（演示）')));
-  const openReport = (id) => { confirmState.sel = id; location.hash = '#/confirm'; };
-  $$('[data-report2]').forEach((b) => b.addEventListener('click', () => openReport(b.dataset.report2)));
+  $$('[data-report2]').forEach((b) => b.addEventListener('click', () => {
+    const t = [...PRESET_RESULTS, ...HISTORY_TASKS].find((x) => x.id === b.dataset.report2);
+    if (t) reportViewModal(synthRecord(t), t.id);
+  }));
+  bindJudgeBlock(renderTasks);
 }
 
 
