@@ -1049,8 +1049,8 @@ const TRN_DATASETS = [
 const TRN_BENCHMARKS = ['ExploitGym', 'CyberGym', 'Cybench', 'RealVuln v2'];
 const TRN_PIPELINE = [
   { name: '数据准备', desc: '数据工厂产出 CPT 语料与漏洞数据卡片，训练任务按数据集快照锁定输入。' },
-  { name: '训练配置', desc: '5 步向导完成基座 / 算法 / 超参 / 资源配置，提交后进入调度队列。' },
-  { name: '训练执行', desc: '调度器分配 8×H100 资源组执行训练，过程仅可暂停 / 终止，不可修改。' },
+  { name: '训练配置', desc: '6 步向导完成基座 / 算法 / 资源 / 超参配置，提交后进入调度队列。' },
+  { name: '训练执行', desc: '调度器分配 8×H100 资源组执行训练，过程仅可终止，不可修改。' },
   { name: '实时监控大屏', desc: 'wandb 风 12 项标量曲线 + 终端日志 + GPU 集群监控，约 2s 一拍。' },
   { name: '发布备份', desc: 'Checkpoint 每 2h 自动保存（SHA256 校验），经门禁评估后发布至模型中心。' },
 ];
@@ -1078,31 +1078,36 @@ const TRN_STATUS_CN = { running: '● 运行中', queued: '◷ 排队中', done:
 const TRN_WEEK_NEW_VERSIONS = 3;
 /* 实时监控：12 项标量（TR-03~06） */
 const TRN_SCALARS = [
-  { group: '训练效果',   name: 'raw_reward',       base: 0.42, drift: 0.004, jitter: 0.05, digits: 3 },
-  { group: '训练效果',   name: 'truncated_ratio',  base: 0.18, drift: -0.002, jitter: 0.02, digits: 3 },
-  { group: '训练效果',   name: 'response_len',     base: 486,  drift: 1.2,   jitter: 26,  digits: 0 },
-  { group: '数据质量',   name: 'fetched/reward',   base: 1204, drift: 3.1,   jitter: 60,  digits: 0 },
-  { group: '数据质量',   name: 'used/reward',      base: 862,  drift: 2.4,   jitter: 44,  digits: 0 },
-  { group: '训练稳定性', name: 'ppo_kl',           base: 0.045, drift: -0.0004, jitter: 0.012, digits: 4 },
-  { group: '训练稳定性', name: 'pg_clipfrac',      base: 0.12, drift: -0.001, jitter: 0.03, digits: 3 },
-  { group: '训练稳定性', name: 'entropy_loss',     base: 0.68, drift: -0.003, jitter: 0.06, digits: 3 },
-  { group: '训练效率',   name: 'wait_time_ratio',  base: 0.09, drift: -0.0008, jitter: 0.02, digits: 3 },
-  { group: '训练效率',   name: 'train_wait_time',  base: 2.4,  drift: -0.01, jitter: 0.5, digits: 2 },
-  { group: '训练效率',   name: 'train_time',       base: 8.6,  drift: 0.005, jitter: 0.4, digits: 2 },
-  { group: '训练效率',   name: 'step_time',        base: 11.0, drift: -0.004, jitter: 0.6, digits: 2 },
+  { group: '训练效果',   name: 'rollout/raw_reward',      base: 0.31,  drift: 0.006,   jitter: 0.09,  digits: 3, min: 0.05, max: 1.0 },
+  { group: '训练效果',   name: 'rollout/truncated_ratio', base: 0.17,  drift: -0.0018, jitter: 0.035, digits: 3, min: 0.02, max: 0.6 },
+  { group: '训练效果',   name: 'rollout/response_len',    base: 496,   drift: 0.6,     jitter: 58,   digits: 0, min: 200, max: 1400 },
+  { group: '数据质量',   name: 'fetched/reward',          base: 0.44,  drift: 0.002,   jitter: 0.12,  digits: 3, min: 0.1, max: 1.0 },
+  { group: '数据质量',   name: 'used/reward',             base: 0.51,  drift: 0.003,   jitter: 0.15,  digits: 3, min: 0.15, max: 0.95 },
+  { group: '训练稳定性', name: 'train/ppo_kl',            base: 0.032, drift: -0.0002, jitter: 0.011, digits: 4, min: 0.004, max: 0.09 },
+  { group: '训练稳定性', name: 'train/pg_clipfrac',       base: 0.11,  drift: -0.0006, jitter: 0.04,  digits: 3, min: 0.02, max: 0.35 },
+  { group: '训练稳定性', name: 'train/entropy_loss',      base: 0.71,  drift: -0.004,  jitter: 0.05,  digits: 3, min: 0.2, max: 1.0 },
+  { group: '训练效率',   name: 'perf/wait_time_ratio',    base: 0.11,  drift: -0.0006, jitter: 0.03,  digits: 3, min: 0.02, max: 0.4 },
+  { group: '训练效率',   name: 'perf/train_wait_time',    base: 2.6,   drift: -0.008,  jitter: 0.6,   digits: 2, min: 0.5, max: 6 },
+  { group: '训练效率',   name: 'perf/train_time',         base: 8.9,   drift: 0.004,   jitter: 0.5,   digits: 2, min: 4, max: 16 },
+  { group: '训练效率',   name: 'perf/step_time',          base: 11.5,  drift: -0.003,  jitter: 0.7,   digits: 2, min: 6, max: 20 },
 ];
 const TRN_HPARAMS = [
-  ['基座模型', '自研 v2.2'], ['算法框架', '自研 RL 框架'], ['训练类型', 'RL 强化学习'],
-  ['数据集', 'ExploitGym 轨迹 3.6 万'], ['并行策略', '8×H100 · DP4/TP2'], ['精度', 'bf16'],
-  ['梯度裁剪', 'max_norm 1.0'], ['保存策略', '每 2h · SHA256 校验'],
+  ['基座模型', '自研 v2.2'], ['算法框架', '自研 RL 框架'], ['RL 算法', 'GRPO'],
+  ['训练类型', 'RL 强化学习'], ['数据集', 'ExploitGym 轨迹 3.6 万'], ['精度', 'bf16'],
+  ['LR', '1e-6'], ['EPS_CLIP', '0.2'], ['RL_EPOCH', '1000'],
+  ['GLOBAL_BATCH_SIZE', '512'], ['GROUP_SIZE', '8'], ['MAX_TOKENS_PER_GPU', '5000'],
+  ['SGLANG_MEM_STATIC', '0.45'], ['ROLLOUT_NUM_GPUS', '3'], ['ACTOR_GPUS_PER_NODE', '1'],
+  ['保存策略', '每 2h · SHA256 校验'],
 ];
 const TRN_LOG_POOL = [
-  '[rollout] step {s} · batch 256 · raw_reward {r}',
-  '[train] ppo_epoch 4/4 · kl {k} · clipfrac {c}',
-  '[fetch] ExploitGym 轨迹回流 +128 条 · 已去重',
-  '[ckpt] 自动保存 checkpoint-step-{s} · SHA256 校验通过',
-  '[eval] 在线探测 Cybench 子集 · pass@1 0.61',
-  '[sched] GPU 资源组 H100-Pool-A 心跳正常 · 利用率 {u}%',
+  'step:{s} | rollout/raw_reward:{r} | rollout/truncated_ratio:0.142 | rollout/response_len/mean:498 | rollout/response_len/max:1204',
+  'step:{s} | train/ppo_kl:{k} | train/pg_clipfrac:{c} | train/entropy_loss:0.612 | train/grad_norm:0.87',
+  'step:{s} | perf/step_time:11.42s | perf/train_time:8.76s | perf/train_wait_time:2.31s | perf/wait_time_ratio:0.203',
+  '[rollout] global_batch_size 512 · group_size 8 · max_tokens_per_gpu 5000 · sglang mem_fraction_static 0.45',
+  '[train] actor update · algo GRPO · lr 1e-6 · eps_clip 0.2 · advantage estimator GAE',
+  '[ckpt] save checkpoint step {s} → /mnt/shared-storage/checkpoints/qwen3.5-9b-grpo/step_{s} · SHA256 ok',
+  '[fetch] trajectory buffer +512 · dedup done · fetched/reward mean 0.47',
+  '[sched] H100-Pool-A heartbeat ok · rollout 3 GPUs · actor 1 GPU/node · util {u}%',
 ];
 
 /* ── 协同研判（RT-06，真实链路的 Mock 原型）───────────────────── */

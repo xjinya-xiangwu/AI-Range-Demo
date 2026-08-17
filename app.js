@@ -3671,22 +3671,35 @@ function renderTraining() {
   }, 2000);
 }
 
-/* ── TR-01 · 5 步创建向导（全 Mock 可提交）────────────────────── */
+/* ── TR-01 · 6 步创建向导（全 Mock 可提交）────────────────────── */
+/* 用户可感知 RL 超参数（变量名 / 中文名 / 默认值 / 调优方向），依据资源设置 */
+const TRN_HP_DEFS = [
+  ['LR', '学习率', '1e-6', 'RL 学习率通常极小；训练不稳定（loss 爆炸）降至 5e-7，收敛太慢升至 2e-6'],
+  ['EPS_CLIP', '梯度裁剪', '0.2', '标准值；策略更新太激进导致崩坏，可降至 0.1'],
+  ['RL_EPOCH', '训练轮次', '1000', '总训练轮数；第一次测试可以先跑 50 轮看效果，再改回去'],
+  ['RL_GLOBAL_BATCH_SIZE', '全局训练样本总数', '512', '默认 512；显存不足改为 256 或 128'],
+  ['RL_GROUP_SIZE', 'group size', '8', '默认 8；显存不足改为 4'],
+  ['MAX_TOKENS_PER_GPU', '单卡最大 Token 数', '5000', '默认 5000；24G 卡建议改为 3000 甚至 2048'],
+  ['SGLANG_MEM_FRACTION_STATIC', '推理引擎显存占用比例', '0.45', '默认 0.45（45%）；采样时频繁 OOM，降至 0.35'],
+  ['ROLLOUT_NUM_GPUS', 'rollout GPU 数量', '3', '用来 rollout 的 GPU 数量'],
+  ['ACTOR_NUM_GPUS_PER_NODE', '训练 GPU 数量', '1', '用来训练的 GPU 数量（每节点）'],
+];
+const TRN_RL_ALGOS = ['GRPO', 'PPO', 'GSPO'];
 let trnWiz = null;
 function openTrainingWizard() {
   trnWiz = {
     step: 1,
     cfg: {
       name: 'TRN-2026-0415 渗透链智能体 RL 训练', priority: 'P1 高', type: 'RL 强化学习', desc: '',
-      dataset: TRN_DATASETS[0], benchmarks: ['ExploitGym'], boost: true, split: '8 : 2',
-      base: '自研 v2.2', framework: '自研 RL 框架', finetune: 'LoRA（推荐）',
-      lr: '3e-5', epochs: 3, batch: 32, warmup: '3%', clip: '1.0',
+      dataset: TRN_DATASETS[0], benchmarks: ['ExploitGym'], split: '8 : 2',
+      base: '自研 v2.2', framework: '自研 RL 框架', rlAlgo: 'GRPO', finetune: 'LoRA（推荐）',
       gpu: '8×H100', duration: '24 小时',
+      hp: Object.fromEntries(TRN_HP_DEFS.map(([k, , dft]) => [k, dft])),
     },
   };
   openModal(`
     <div class="modal-title serif">新建训练任务</div>
-    <div class="modal-sub">5 步创建向导 · 提交后进入调度队列</div>
+    <div class="modal-sub">6 步创建向导 · 提交后进入调度队列</div>
     <div class="modal-body">
       <div class="steps-bar" id="tw-steps" style="margin-bottom:16px"></div>
       <div id="tw-body"></div>
@@ -3700,14 +3713,17 @@ function openTrainingWizard() {
   $('#tw-cancel').addEventListener('click', closeModal);
   $('#tw-back').addEventListener('click', () => { if (trnWiz.step > 1) { trnWiz.step -= 1; renderTwiz(); } });
   $('#tw-next').addEventListener('click', () => {
-    if (trnWiz.step < 5) { trnWiz.step += 1; renderTwiz(); return;
+    if (trnWiz.step < 6) { trnWiz.step += 1; renderTwiz(); return;
     }
     /* 提交（Mock） */
     const c = trnWiz.cfg;
     trnState.tasks.unshift({
       id: 'TRN-2026-0415', name: c.name.replace(/^TRN-2026-0415\s*/, ''), type: c.type, status: 'queued',
-      dataset: c.dataset.split('（')[0], goal: c.desc || `基座 ${c.base} · ${c.finetune} · ${c.benchmarks.join(' / ')} 门禁回归`,
-      gpu: c.gpu, progress: 0, step: 0, totalStep: c.epochs * 8000, created: '2026-08-04 ' + fmtClock(new Date()).slice(0, 5), pinned: false,
+      dataset: c.dataset.split('（')[0],
+      goal: c.desc || `基座 ${c.base} · ${c.framework === '自研 RL 框架' ? c.rlAlgo : c.framework} · ${c.benchmarks.join(' / ')} 门禁回归`,
+      gpu: c.gpu, progress: 0, step: 0,
+      totalStep: (parseInt(c.hp.RL_EPOCH, 10) || 1000) * 60,
+      created: '2026-08-04 ' + fmtClock(new Date()).slice(0, 5), pinned: false,
     });
     closeModal();
     showToast('✓ 训练任务已提交，进入调度队列');
@@ -3717,10 +3733,10 @@ function openTrainingWizard() {
 }
 function renderTwiz() {
   const c = trnWiz.cfg, s = trnWiz.step;
-  $('#tw-steps').innerHTML = ['基本信息', '数据与基准', '模型与算法', '超参数', '资源与确认'].map((l, i) =>
+  $('#tw-steps').innerHTML = ['基本信息', '数据与基准', '模型与算法', '资源', '超参数', '确认提交'].map((l, i) =>
     `<div class="step-item ${s > i + 1 ? 'done' : s === i + 1 ? 'current' : 'todo'}"><span class="step-no">${s > i + 1 ? '✓' : i + 1}</span>${l}</div>`).join('<span class="step-sep">→</span>');
   $('#tw-back').style.visibility = s === 1 ? 'hidden' : '';
-  $('#tw-next').textContent = s === 5 ? '确认提交' : '下一步';
+  $('#tw-next').textContent = s === 6 ? '确认提交' : '下一步';
   const field = (label, inner) => `<div class="wz-field"><span class="field-label">${label}</span>${inner}</div>`;
   const chips = (id, options, cur) => `<div class="radio-row" id="${id}">${options.map((o) =>
     `<div class="radio-chip ${cur === o ? 'selected' : ''}" data-v="${o}">${o}</div>`).join('')}</div>`;
@@ -3744,48 +3760,48 @@ function renderTwiz() {
       field('训练数据集（单选，含规模）', `<select class="select" id="tw-ds">${TRN_DATASETS.map((d) => `<option ${c.dataset === d ? 'selected' : ''}>${d}</option>`).join('')}</select>`) +
       field('评测基准（多选）', `<div class="check-row" id="tw-bm">${TRN_BENCHMARKS.map((b) =>
         `<label class="check-item"><input type="checkbox" value="${b}" ${c.benchmarks.includes(b) ? 'checked' : ''}>${b}</label>`).join('')}</div>`) +
-      field('自动补强开关', `<label class="switch-row"><span class="switch"><input type="checkbox" id="tw-boost" ${c.boost ? 'checked' : ''}><span class="switch-slider"></span></span><span class="small">训练中自动补强难例</span></label>`) +
       field('训练 / 验证集比例', chips('tw-split', ['9 : 1', '8 : 2', '7 : 3'], c.split));
     $('#tw-ds').addEventListener('change', (e) => { c.dataset = e.target.value; });
     $$('#tw-bm input').forEach((x) => x.addEventListener('change', () => {
       c.benchmarks = $$('#tw-bm input:checked').map((y) => y.value);
     }));
-    $('#tw-boost').addEventListener('change', (e) => { c.boost = e.target.checked; });
     bindChips('tw-split', (v) => { c.split = v; });
   } else if (s === 3) {
     body.innerHTML =
       field('基座模型', chips('tw-base', ['自研 v2.2', '自研 v2.1', '自研 v2.0'], c.base)) +
       field('算法框架', chips('tw-fw', ['自研 RL 框架', '自研 SFT 框架'], c.framework)) +
+      (c.framework === '自研 RL 框架'
+        ? field('RL 算法', chips('tw-algo', TRN_RL_ALGOS, c.rlAlgo) +
+            `<div class="small muted" style="margin-top:4px">自研 RL 框架支持 GRPO / PPO / GSPO 等算法，默认 GRPO</div>`)
+        : '') +
       field('微调方式', chips('tw-ft', ['LoRA（推荐）', '全参数'], c.finetune));
     bindChips('tw-base', (v) => { c.base = v; });
-    bindChips('tw-fw', (v) => { c.framework = v; });
+    bindChips('tw-fw', (v) => { c.framework = v; renderTwiz(); });
+    bindChips('tw-algo', (v) => { c.rlAlgo = v; });
     bindChips('tw-ft', (v) => { c.finetune = v; });
   } else if (s === 4) {
     body.innerHTML =
-      field('学习率', `<input class="input mono" id="tw-lr" value="${c.lr}">`) +
-      field('训练轮次 Epochs', `<input class="input mono" id="tw-epochs" type="number" min="1" max="20" value="${c.epochs}">`) +
-      field('Batch Size（单卡）', `<input class="input mono" id="tw-batch" type="number" min="1" max="256" value="${c.batch}">`) +
-      field('Warmup 比例', `<input class="input mono" id="tw-warmup" value="${c.warmup}">`) +
-      field('梯度裁剪', `<input class="input mono" id="tw-clip" value="${c.clip}">`);
-    $('#tw-lr').addEventListener('input', (e) => { c.lr = e.target.value; });
-    $('#tw-epochs').addEventListener('input', (e) => { c.epochs = parseInt(e.target.value, 10) || 3; });
-    $('#tw-batch').addEventListener('input', (e) => { c.batch = parseInt(e.target.value, 10) || 32; });
-    $('#tw-warmup').addEventListener('input', (e) => { c.warmup = e.target.value; });
-    $('#tw-clip').addEventListener('input', (e) => { c.clip = e.target.value; });
+      `<p class="mini-note" style="margin:0 0 12px">先确定训练资源，下一步的超参数将依据资源规模设置</p>` +
+      field('GPU 资源', chips('tw-gpu', ['4×H100', '8×H100'], c.gpu)) +
+      field('最长训练时长', chips('tw-dur', ['12 小时', '24 小时', '48 小时', '不限'], c.duration));
+    bindChips('tw-gpu', (v) => { c.gpu = v; });
+    bindChips('tw-dur', (v) => { c.duration = v; });
+  } else if (s === 5) {
+    body.innerHTML =
+      `<p class="mini-note" style="margin:0 0 12px">依据资源（${c.gpu}）设置 RL 训练超参数 · 每项附调优方向</p>` +
+      TRN_HP_DEFS.map(([k, cn, , hint]) =>
+        field(`${k}（${cn}）`, `<input class="input mono" data-hp="${k}" value="${esc(c.hp[k])}"><div class="small muted" style="margin-top:2px">${hint}</div>`)).join('');
+    $$('[data-hp]').forEach((x) => x.addEventListener('input', () => { c.hp[x.dataset.hp] = x.value; }));
   } else {
     body.innerHTML =
-      field('GPU 资源', chips('tw-gpu', ['4×H100', '8×H100'], c.gpu)) +
-      field('最长训练时长', chips('tw-dur', ['12 小时', '24 小时', '48 小时', '不限'], c.duration)) +
       `<div class="wz-field"><span class="field-label">配置摘要</span>
         <dl class="detail-kv">
           <dt>任务</dt><dd>${esc(c.name)} · ${c.priority} · ${c.type}</dd>
-          <dt>数据</dt><dd>${esc(c.dataset)} · 基准 ${c.benchmarks.join(' / ') || '—'} · 补强${c.boost ? '开' : '关'} · ${c.split}</dd>
-          <dt>模型</dt><dd>${c.base} · ${c.framework} · ${c.finetune}</dd>
-          <dt>超参</dt><dd class="mono">lr ${c.lr} · ep ${c.epochs} · bs ${c.batch} · warmup ${c.warmup} · clip ${c.clip}</dd>
+          <dt>数据</dt><dd>${esc(c.dataset)} · 基准 ${c.benchmarks.join(' / ') || '—'} · ${c.split}</dd>
+          <dt>模型</dt><dd>${c.base} · ${c.framework}${c.framework === '自研 RL 框架' ? ' · ' + c.rlAlgo : ''} · ${c.finetune}</dd>
           <dt>资源</dt><dd>${c.gpu} · ${c.duration}</dd>
+          <dt>超参</dt><dd class="mono">${TRN_HP_DEFS.map(([k]) => `${k}=${c.hp[k]}`).join(' · ')}</dd>
         </dl></div>`;
-    bindChips('tw-gpu', (v) => { c.gpu = v; });
-    bindChips('tw-dur', (v) => { c.duration = v; });
   }
 }
 
@@ -3794,7 +3810,12 @@ function renderTwiz() {
  * ════════════════════════════════════════════════════════════════ */
 function tlSeed(s) {
   let v = s.base;
-  return Array.from({ length: 40 }, () => { v += s.drift + (Math.random() - 0.5) * 2 * s.jitter; return v; });
+  return Array.from({ length: 90 }, () => {
+    v += s.drift + (Math.random() - 0.5) * 2 * s.jitter;
+    if (s.min !== undefined) v = Math.max(s.min, v);
+    if (s.max !== undefined) v = Math.min(s.max, v);
+    return v;
+  });
 }
 const tlState = {
   series: TRN_SCALARS.map((s) => tlSeed(s)),
@@ -3812,7 +3833,7 @@ function tlLogLine() {
   const tpl = TRN_LOG_POOL[Math.floor(Math.random() * TRN_LOG_POOL.length)];
   return `[${fmtClock(new Date())}] ` + tpl
     .replace('{s}', String(tlState.step))
-    .replace('{r}', (0.4 + Math.random() * 0.3).toFixed(3))
+    .replace('{r}', (0.32 + Math.random() * 0.42).toFixed(3))
     .replace('{k}', (0.02 + Math.random() * 0.03).toFixed(4))
     .replace('{c}', (0.08 + Math.random() * 0.08).toFixed(3))
     .replace('{u}', String(Math.round(tlState.gpu[0].util)));
@@ -3879,8 +3900,11 @@ function renderTrainingLive() {
     tlState.step += 40 + Math.floor(Math.random() * 30);
     TRN_SCALARS.forEach((s, i) => {
       const arr = tlState.series[i];
-      arr.push(arr[arr.length - 1] + s.drift + (Math.random() - 0.5) * 2 * s.jitter);
-      if (arr.length > 40) arr.shift();
+      let nv = arr[arr.length - 1] + s.drift + (Math.random() - 0.5) * 2 * s.jitter;
+      if (s.min !== undefined) nv = Math.max(s.min, nv);
+      if (s.max !== undefined) nv = Math.min(s.max, nv);
+      arr.push(nv);
+      if (arr.length > 90) arr.shift();
       const v = $('#tl-val-' + i); if (v) v.textContent = arr[arr.length - 1].toFixed(s.digits);
       const c = $('#tl-chart-' + i); if (c) c.innerHTML = tlSpark(arr, 'var(--chart-1)');
     });
@@ -6232,7 +6256,7 @@ function renderTraining() {
     ${backLink('#/dashboard', '态势感知')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：5 步向导创建训练任务；置顶的演示任务与态势感知首页的训练面板同源，点击「实时监控」可查看训练大屏；列表实时展示运行 / 排队 / 完成 / 评估状态，可终止，不可修改。')}</h2>
+        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：6 步向导创建训练任务；置顶的演示任务与态势感知首页的训练面板同源，点击「实时监控」可查看训练大屏；列表实时展示运行 / 排队 / 完成 / 评估状态，可终止，不可修改。')}</h2>
         <p class="page-desc">训练任务的创建、调度与结果总览 · 进度实时跳动</p>
       </div>
       <button class="btn btn-primary" id="trn-new">新建训练任务</button>
