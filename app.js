@@ -62,7 +62,8 @@ function every(fn, ms) { const id = setInterval(fn, ms); timers.push({ t: 'iv', 
 function clearTimers() { timers.forEach((t) => (t.t === 'to' ? clearTimeout(t.id) : clearInterval(t.id))); timers = []; }
 
 function openModal(html, wide) {
-  $('#modal-root').innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal${wide ? ' wide' : ''}" role="dialog"><button class="modal-x" data-x aria-label="关闭">✕</button>${html}</div>`;
+  const wcls = wide === true ? ' wide' : wide ? ' ' + wide : '';
+  $('#modal-root').innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal${wcls}" role="dialog"><button class="modal-x" data-x aria-label="关闭">✕</button>${html}</div>`;
   $('[data-close]').addEventListener('click', closeModal);
   $('[data-x]').addEventListener('click', closeModal);
 }
@@ -79,7 +80,7 @@ const NAV_OF = {
   tasks: 'tasks', workbench: 'tasks',
   'range-hall': 'range-hall', range: 'range-hall', 'range-detail': 'range-hall',
   confirm: 'confirm',
-  training: 'training', 'training-live': 'training-live', models: 'models',
+  training: 'training', 'training-live': 'training', models: 'models',
   battle: 'battle',
   data: 'data',
   gateway: 'gateway',
@@ -3654,7 +3655,8 @@ function renderTraining() {
     const [act, idx] = b.dataset.trn.split(':');
     const t = trnState.tasks[Number(idx)];
     if (act === 'stop') { t.status = 'done'; t.pinned = false; showToast(`${t.id} 已终止废弃`); renderTraining(); }
-    else if (act === 'live') location.hash = '#/training-live';
+    else if (act === 'live') openTrainingLiveModal();
+    else if (act === 'expd' || act === 'expm') showToast('数据导出功能开发中');
   }));
 
   /* 进度定时跳动（TR-02） */
@@ -3806,7 +3808,8 @@ function renderTwiz() {
 }
 
 /* ════════════════════════════════════════════════════════════════
- * 页面 · 训练场 · 实时监控（TR-03~06/08a · wandb 风，全 Mock）
+ * 训练场 · 任务详情（实时监控弹窗 · TR-03~06 · wandb 风，全 Mock）
+ * 不作为独立导航页：#/training-live = 训练任务中心 + 详情弹窗
  * ════════════════════════════════════════════════════════════════ */
 function tlSeed(s) {
   let v = s.base;
@@ -3838,65 +3841,70 @@ function tlLogLine() {
     .replace('{c}', (0.08 + Math.random() * 0.08).toFixed(3))
     .replace('{u}', String(Math.round(tlState.gpu[0].util)));
 }
+let tlModalIv = null;
+function stopTlModal() { if (tlModalIv) { clearInterval(tlModalIv); tlModalIv = null; } }
 function renderTrainingLive() {
+  renderTraining();
+  openTrainingLiveModal();
+}
+function openTrainingLiveModal() {
   let lastGroup = '';
-  $('#view').innerHTML = `
-  <div class="page" style="max-width:1400px">
-    <div class="page-head-row">
+  const t = trnState.tasks.find((x) => x.id === 'TRN-2026-0413') || trnState.tasks[0];
+  const infoRows = [
+    ['TRN_ID', t.id], ['任务类型', t.type], ['训练数据集', t.dataset],
+    ['GPU 资源', t.gpu], ['创建时间', t.created],
+    ['当前进度', `${t.progress}% · step ${t.step.toLocaleString()} / ${t.totalStep.toLocaleString()}`],
+  ];
+  openModal(`
+    <div class="modal-title serif">任务详情 · ${t.id} ${esc(t.name)} ${helpTip('运行中训练任务的详情与实时面板：任务详情信息（含超参数）、12 项标量曲线（训练效果 / 数据质量 / 稳定性 / 效率四类）、终端日志流与 GPU 集群监控，数据约 2 秒刷新一次。')}</div>
+    <div class="modal-sub">${t.type} · ${TRN_STATUS_CN[t.status] || ''} · <span style="color:var(--chart-3)"><span class="live-dot"></span> 数据流实时推送中 · 2s</span></div>
+    <div class="modal-body">
+      <div class="card" style="margin:0">
+        <div class="card-sub" style="margin-bottom:10px">任务详情信息</div>
+        <div class="hp-grid">${infoRows.concat(TRN_HPARAMS).map(([k, v]) => `<div class="dc-kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div>
+      </div>
+      <div class="scalar-grid">
+        ${TRN_SCALARS.map((s, i) => {
+          const head = s.group !== lastGroup ? `<div class="scalar-group">${s.group}</div>` : '';
+          lastGroup = s.group;
+          const vals = tlState.series[i];
+          return head + `<div class="card scalar-card">
+            <div class="sc-name">${s.name}</div>
+            <div class="sc-val" id="tl-val-${i}">${vals[vals.length - 1].toFixed(s.digits)}</div>
+            <span id="tl-chart-${i}">${tlSpark(vals, 'var(--chart-1)')}</span>
+          </div>`;
+        }).join('')}
+      </div>
       <div>
-        <h2 class="page-title">训练实时监控 ${helpTip('训练过程的实时面板：12 项标量曲线按训练效果 / 数据质量 / 稳定性 / 效率四类组织，附终端日志流、GPU 集群监控与超参数面板，数据约 2 秒刷新一次。')}</h2>
-        <p class="page-desc">TRN-2026-0413 渗透链智能体 RL 训练 · 标量曲线 + 集群监控 · 数据流实时推送</p>
+        <div class="history-head">GPU 集群监控 · 8×H100<span class="head-badge">秒级刷新样式</span></div>
+        <div class="gpu-grid">
+          ${tlState.gpu.map((g, i) => `
+          <div class="card gpu-cell" id="tlgpu-${i}">
+            <div class="g-name">H100-${i} · 利用率</div><div class="g-val">${Math.round(g.util)}%</div>
+            <div class="g-track"><div class="g-fill" style="width:${g.util}%"></div></div>
+            <div class="g-name" style="margin-top:4px">温度 <span class="gt">${Math.round(56 + g.util / 5)}°C</span> · 功耗 <span class="gw">${Math.round(380 + g.util * 3.2)}W</span></div>
+          </div>`).join('')}
+        </div>
+        <p class="mini-note" style="margin:8px 0 0">磁盘 IO <b class="mono" id="tl-io">2.8 GB/s</b> · 网络吞吐 <b class="mono">1.6 GB/s</b> · 资源组 H100-Pool-A</p>
       </div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <span class="small" style="color:var(--chart-3)"><span class="live-dot"></span> 数据流实时推送中 · 2s</span>
-        <a class="btn btn-outline" href="#/training">返回训练任务</a>
+      <div>
+        <div class="history-head">终端日志流</div>
+        <div class="log-stream" id="tl-logs"></div>
       </div>
     </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="tl-back">← 返回任务中心</button>
+    </div>`, 'xwide');
 
-    <div class="card" style="margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      <span class="badge badge-primary">Checkpoint 版本管理 · 当前</span>
-      <span class="mono small">v2.2-ckpt-37200</span>
-      <span class="small muted">保存于 2026-08-04 14:00 · 评估分 92.4 · SHA256 校验通过</span>
-      <span style="flex:1"></span>
-      <a class="small" href="#/models" style="color:var(--primary);text-decoration:none">模型中心 →</a>
-    </div>
-
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-sub" style="margin-bottom:10px">hparams · 超参数面板</div>
-      <div class="hp-grid">${TRN_HPARAMS.map(([k, v]) => `<div class="dc-kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div>
-    </div>
-
-    <div class="scalar-grid" id="tl-grid">
-      ${TRN_SCALARS.map((s, i) => {
-        const head = s.group !== lastGroup ? `<div class="scalar-group">${s.group}</div>` : '';
-        lastGroup = s.group;
-        const vals = tlState.series[i];
-        return head + `<div class="card scalar-card">
-          <div class="sc-name">${s.name}</div>
-          <div class="sc-val" id="tl-val-${i}">${vals[vals.length - 1].toFixed(s.digits)}</div>
-          <span id="tl-chart-${i}">${tlSpark(vals, 'var(--chart-1)')}</span>
-        </div>`;
-      }).join('')}
-    </div>
-
-    <div class="history-head" style="margin-top:24px">GPU 集群监控 · 8×H100<span class="head-badge">秒级刷新样式</span></div>
-    <div class="gpu-grid" id="tl-gpu">
-      ${tlState.gpu.map((g, i) => `
-      <div class="card gpu-cell" id="tlgpu-${i}">
-        <div class="g-name">H100-${i} · 利用率</div><div class="g-val">${Math.round(g.util)}%</div>
-        <div class="g-track"><div class="g-fill" style="width:${g.util}%"></div></div>
-        <div class="g-name" style="margin-top:4px">温度 <span class="gt">${Math.round(56 + g.util / 5)}°C</span> · 功耗 <span class="gw">${Math.round(380 + g.util * 3.2)}W</span></div>
-      </div>`).join('')}
-    </div>
-    <p class="mini-note" style="margin:8px 0 16px">磁盘 IO <b class="mono" id="tl-io">2.8 GB/s</b> · 网络吞吐 <b class="mono">1.6 GB/s</b> · 资源组 H100-Pool-A</p>
-
-    <div class="history-head">终端日志流</div>
-    <div class="log-stream" id="tl-logs"></div>
-  </div>`;
-  for (let i = 0; i < 8; i++) { tlState.logs.push(tlLogLine()); }
+  if (!tlState.logs.length) for (let i = 0; i < 8; i++) { tlState.logs.push(tlLogLine()); }
   $('#tl-logs').innerHTML = tlState.logs.map((l) => `<div>${esc(l)}</div>`).join('');
 
-  every(() => {
+  $('#tl-back').addEventListener('click', () => { stopTlModal(); closeModal(); });
+  $('[data-close]').addEventListener('click', stopTlModal);
+  $('[data-x]').addEventListener('click', stopTlModal);
+
+  stopTlModal();
+  tlModalIv = every(() => {
     tlState.step += 40 + Math.floor(Math.random() * 30);
     TRN_SCALARS.forEach((s, i) => {
       const arr = tlState.series[i];
@@ -6256,7 +6264,7 @@ function renderTraining() {
     ${backLink('#/dashboard', '态势感知')}
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：6 步向导创建训练任务；置顶的演示任务与态势感知首页的训练面板同源，点击「实时监控」可查看训练大屏；列表实时展示运行 / 排队 / 完成 / 评估状态，可终止，不可修改。')}</h2>
+        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：6 步向导创建训练任务；置顶的演示任务与态势感知首页的训练面板同源，点击运行中任务的「实时监控」弹出任务详情与训练大屏；列表实时展示运行 / 排队 / 完成 / 评估状态，可终止，不可修改。')}</h2>
         <p class="page-desc">训练任务的创建、调度与结果总览 · 进度实时跳动</p>
       </div>
       <button class="btn btn-primary" id="trn-new">新建训练任务</button>
@@ -6319,7 +6327,8 @@ function renderTraining() {
             <div class="small muted mono">step ${t.totalStep.toLocaleString()} / ${t.totalStep.toLocaleString()}</div></td>
           <td><span class="badge ${TRN_STATUS_CLS[t.status]}">${TRN_STATUS_CN[t.status]}</span></td>
           <td style="text-align:right;white-space:nowrap">
-            <span class="mini-note" style="margin:0">已归档</span>
+            <button class="btn btn-outline btn-sm" data-trn="expd:${i}">导出数据集</button>
+            <button class="btn btn-outline btn-sm" data-trn="expm:${i}">导出模型</button>
           </td>
         </tr>`;
       }).join('') || '<tr><td colspan="8" class="small muted" style="text-align:center;padding:20px">暂无已完成任务</td></tr>'}
@@ -6337,7 +6346,8 @@ function renderTraining() {
     const [act, idx] = b.dataset.trn.split(':');
     const t = trnState.tasks[Number(idx)];
     if (act === 'stop') { t.status = 'done'; t.pinned = false; showToast(`${t.id} 已终止废弃`); renderTraining(); }
-    else if (act === 'live') location.hash = '#/training-live';
+    else if (act === 'live') openTrainingLiveModal();
+    else if (act === 'expd' || act === 'expm') showToast('数据导出功能开发中');
   }));
 
   /* 进度定时跳动 */
