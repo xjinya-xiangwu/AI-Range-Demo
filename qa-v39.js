@@ -27,14 +27,34 @@ const puppeteer = require('puppeteer-core');
   const dotVisible = await page.$eval('#judge-dot', (e) => e.style.display !== 'none');
   check('任务中心导航项显示待确认小圆点', dotVisible);
 
-  /* ② 任务中心含结果确认区块 + 恰好 2 项待确认 */
+  /* ② 任务中心含结果确认区块（置顶）+ 恰好 2 项待确认 */
   await page.goto('http://127.0.0.1:7132/index.html#/tasks', { waitUntil: 'networkidle0' });
   await sleep(800);
   const tasksText = await page.$eval('#view', (e) => e.textContent);
+  const tasksVisible = await page.$eval('#view', (e) => e.innerText);
   check('任务中心含「结果确认」区块', /结果确认/.test(tasksText));
+  const firstHead = await page.$eval('#view .history-head', (e) => e.textContent);
+  check('结果确认区块位于页面置顶', /结果确认/.test(firstHead));
+  check('已去掉三阶段说明（自动初审/人工复审/终审归档）', !/自动初审|人工复审|终审归档/.test(tasksVisible));
+  check('页面不直接显示已办结归档项', !/已办结 · 终审归档/.test(tasksVisible));
   const pendingBtns = await page.$$('[data-judge^="confirm:"]');
   check('恰好 2 项待确认风险点', pendingBtns.length === 2);
   check('提示文案为「待确认 2 项」', /待确认 2 项/.test(tasksText));
+
+  /* ②b 查看已办结风险点弹窗 */
+  const doneBtn = await page.$('#jg-done-list');
+  const doneBtnText = doneBtn ? await page.$eval('#jg-done-list', (e) => e.textContent) : '';
+  check('有「查看已办结风险点（2）」按钮', doneBtn !== null && /查看已办结风险点（2）/.test(doneBtnText));
+  await doneBtn.click(); await sleep(500);
+  const doneModal = await page.$eval('.modal', (e) => e.textContent).catch(() => '');
+  const doneRows = await page.$$('.modal .ticket');
+  check('已办结弹窗列出 2 条归档风险点', /已办结风险点（2）/.test(doneModal) && doneRows.length === 2 && /已办结 · 终审归档/.test(doneModal));
+  await page.click('#jd-done-close'); await sleep(400);
+
+  /* ②c 闸门强提示 + 任务信息 */
+  const gateStrong = await page.$('.gate-strong') !== null;
+  const gateText = await page.$eval('.gate-bar', (e) => e.textContent);
+  check('闸门强提示样式 + 带任务信息', gateStrong && /JOB-20260804-07/.test(gateText) && /JOB-20260804-06/.test(gateText) && /SCN-0[12]/.test(gateText));
 
   /* ③ 闸门：已完成列表初始锁定 + 生成报告按钮禁用 */
   const gateInfo = await page.evaluate(() => {
@@ -51,6 +71,10 @@ const puppeteer = require('puppeteer-core');
   await remain[0].click(); await sleep(500);
   const gateNow = await page.$eval('#jg-report', (e) => !e.disabled);
   check('全部办结后「生成评测报告」置亮', gateNow);
+  const doneBtn2 = await page.$eval('#jg-done-list', (e) => e.textContent);
+  check('办结后「查看已办结风险点」计数变 4', /查看已办结风险点（4）/.test(doneBtn2));
+  const emptyMsg = await page.$eval('#view', (e) => e.innerText);
+  check('待确认列表显示全部办结空态', /全部风险点已办结 · 可生成评测报告/.test(emptyMsg));
   await page.click('#jg-report'); await sleep(600);
   const unlocked = await page.$$('[data-report2]');
   check('生成报告后已完成任务列表解锁', unlocked.length >= 1);

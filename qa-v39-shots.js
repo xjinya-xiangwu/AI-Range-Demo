@@ -12,7 +12,7 @@ const puppeteer = require('puppeteer-core');
   await sleep(400); await page.click('#lg-go'); await sleep(700);
   await page.goto('http://127.0.0.1:7132/index.html#/tasks', { waitUntil: 'networkidle0' });
   await sleep(900);
-  await page.evaluate(() => document.querySelectorAll('.history-head')[1].scrollIntoView({ block: 'start' }));
+  await page.evaluate(() => window.scrollTo(0, 0));
   await sleep(300);
   await page.screenshot({ path: 'v39-tasks-confirm.png' });
   /* 办结2项+生成报告后的解锁态 */

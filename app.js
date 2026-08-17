@@ -4598,19 +4598,24 @@ const confirmState = { sel: null, checked: new Set(), reportReady: false };
 
 function judgeBlockHtml() {
   const open = judgeOpenCount();
+  const openTickets = judgeState.tickets.map((t, i) => [t, i]).filter(([t]) => t.status !== 'done');
+  const doneN = judgeState.tickets.length - open;
   return `
-    <div class="judge-flow">
-      <div class="jf-stage"><div class="jf-name">自动初审</div><div class="jf-desc">评分器 · 秒级 · 高置信 ≥95% 直通归档（约 62%）</div></div>
-      <div class="jf-stage"><div class="jf-name">人工复审</div><div class="jf-desc">专家 + AI 研判建议 · 低置信 / 争议工单进入队列</div></div>
-      <div class="jf-stage"><div class="jf-name">终审归档</div><div class="jf-desc">WORM 只读 · 不可篡改 · 保留 180 天</div></div>
-    </div>
     <div class="card" style="padding:0">
-      ${judgeState.tickets.map((t, i) => ticketHtml(t, i)).join('')}
+      ${openTickets.length
+        ? openTickets.map(([t, i]) => ticketHtml(t, i)).join('')
+        : '<div class="small muted" style="text-align:center;padding:18px">全部风险点已办结 · 可生成评测报告</div>'}
     </div>
-    <div class="gate-bar">
+    <div style="display:flex;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-ghost btn-sm" id="jg-done-list">查看已办结风险点（${doneN}）</button>
+    </div>
+    <div class="gate-bar gate-strong">
       <div>
-        <div style="font-weight:600;font-size:13px">出报告闸门</div>
-        <div class="small muted">${open === 0 ? '全部风险点工单已办结，可生成评测报告' : `存在未办结工单，报告产出被阻塞 · 剩余 ${open} 条`}</div>
+        <div style="font-weight:600;font-size:13px">${open > 0 ? '⚠ 出报告闸门 · 报告产出被阻塞' : '✓ 出报告闸门 · 已解锁'}</div>
+        <div class="small" style="margin-top:2px">${open > 0
+          ? `以下任务存在 ${open} 项待确认风险点，全部办结后才能生成评测报告：`
+          : '全部风险点已办结，可生成评测报告'}</div>
+        ${open > 0 ? `<div class="small mono" style="margin-top:4px;color:var(--chart-4)">${openTickets.map(([t]) => `${t.id}（${esc(t.scene)}）`).join('；')}</div>` : ''}
       </div>
       <span style="flex:1"></span>
       ${open === 0
@@ -6041,7 +6046,10 @@ function renderTasks() {
       <button class="btn btn-primary" id="btn-new-task">新建测试任务</button>
     </div>
 
-    <div class="history-head head-row">
+    <div class="history-head">结果确认 ${helpTip('任务跑完后，评测结果先进入自动初审；低置信或有争议的风险点会生成待确认工单，由你逐条确认 / 改判 / 驳回。全部工单办结后才能生成评测报告，报告生成后下方已完成任务列表解锁。')}<span class="head-badge">待确认 ${judgeOpenCount()} 项 · 全部办结后才能生成评测报告</span></div>
+    ${judgeBlockHtml()}
+
+    <div class="history-head head-row" style="margin-top:28px">
       <span>运行中任务列表<span class="head-badge">演示任务置顶 · 创建时间降序</span></span>
       <span style="display:flex;gap:8px;align-items:center">
         <input class="input input-sm" id="tq-q" placeholder="搜索 JOB_ID / 场景 / Agent…" value="${esc(tqState.q)}" style="width:220px">
@@ -6054,10 +6062,7 @@ function renderTasks() {
     </table>
     <div class="small muted" style="margin:8px 0 28px">共 ${TASK_QUEUE.length + (userRunning ? 1 : 0)} 个任务 · 显示全部</div>
 
-    <div class="history-head">结果确认 ${helpTip('任务跑完后，评测结果先进入自动初审；低置信或有争议的风险点会生成待确认工单，由你逐条确认 / 改判 / 驳回。全部工单办结后才能生成评测报告，报告生成后下方已完成任务列表解锁。')}<span class="head-badge">待确认 ${judgeOpenCount()} 项 · 全部办结后才能生成评测报告</span></div>
-    ${judgeBlockHtml()}
-
-    <div class="history-head" style="margin-top:28px">已完成任务列表<span class="head-badge">${doneTasks.length} 个 · 点击「查看报告」查看评测报告</span></div>
+    <div class="history-head">已完成任务列表<span class="head-badge">${doneTasks.length} 个 · 点击「查看报告」查看评测报告</span></div>
     ${(confirmState.reportReady && judgeOpenCount() === 0) ? `
     <table class="report-table res-table-wrap">
       <thead><tr><th>JOB_ID</th><th>任务</th><th>类型</th><th>执行体</th><th class="num">得分</th><th>完成时间</th><th></th></tr></thead>
@@ -6083,6 +6088,29 @@ function renderTasks() {
     if (t) reportViewModal(synthRecord(t), t.id);
   }));
   bindJudgeBlock(renderTasks);
+  const jdDone = $('#jg-done-list');
+  if (jdDone) jdDone.addEventListener('click', () => {
+    const dones = judgeState.tickets.filter((t) => t.status === 'done');
+    openModal(`
+      <div class="modal-title serif">已办结风险点（${dones.length}）</div>
+      <div class="modal-sub">终审归档 · WORM 只读 · 保留 180 天 · 不可篡改</div>
+      <div class="modal-body">
+        ${dones.map((t) => `
+        <div class="ticket">
+          <div class="tk-head">
+            <span class="tk-job">${t.id}</span>
+            <span class="tk-title">${esc(t.scene)}</span>
+            <span class="badge">${t.taskType}</span>
+            <span class="tk-score ${judgeScoreCls(t.score)}">${t.score.toFixed(1)}</span>
+          </div>
+          <div class="tk-advice">AI 研判建议：${esc(t.advice)}</div>
+          <div class="tk-evi">证据摘要：${esc(t.evidence)} · WORM 已归档（保留 180 天）</div>
+          <div class="tk-actions"><span class="tk-state"><span class="badge badge-olive">已办结 · 终审归档</span></span></div>
+        </div>`).join('')}
+      </div>
+      <div class="modal-foot"><button class="btn btn-secondary" id="jd-done-close">关闭</button></div>`, true);
+    $('#jd-done-close').addEventListener('click', closeModal);
+  });
 }
 
 

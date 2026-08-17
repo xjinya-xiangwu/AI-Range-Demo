@@ -1344,6 +1344,10 @@ body {
   display: flex; align-items: center; gap: 14px; margin-top: 16px; padding: 12px 16px;
   border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
 }
+.gate-strong {
+  border: 1px solid var(--chart-4); padding: 14px 18px;
+  background: color-mix(in srgb, var(--chart-4) 9%, var(--card));
+}
 
 /* ════════════════════════════════════════════════════════════════
  * 页面 · 训练场（训练任务 / 实时监控）
