@@ -89,7 +89,12 @@ const puppeteer = require('puppeteer-core');
   check('每项参数有 ? 说明按钮', hpTips.length === 9);
   const tipText = await page.$eval('#tw-body', (e) => e.textContent);
   check('调优方向内容仍在（悬停可见）', /显存不足|OOM|调优|降至/.test(tipText));
-  check('顶部说明改为 ? 提示引导', /每项参数旁的 \? 可查看调优方向/.test(tipText));
+  const miniNote = await page.$('#tw-body .mini-note');
+  const topRow = await page.evaluate(() => {
+    const first = document.querySelector('#tw-body').firstElementChild;
+    return { isField: first.classList.contains('wz-field'), tips: first.querySelectorAll('.help-tip').length };
+  });
+  check('顶部说明文字已移除，改为单个 ? 按钮', miniNote === null && !topRow.isField && topRow.tips === 1);
 
   /* ⑧ 确认页摘要无微调方式 */
   await page.click('#tw-next'); await sleep(400);

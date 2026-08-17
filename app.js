@@ -3788,7 +3788,7 @@ function renderTwiz() {
     bindChips('tw-dur', (v) => { c.duration = v; });
   } else if (s === 5) {
     body.innerHTML =
-      `<p class="mini-note" style="margin:0 0 12px">依据资源（${c.gpu}）设置 RL 训练超参数 · 每项参数旁的 ? 可查看调优方向</p>` +
+      `<div style="display:flex;justify-content:flex-end;margin:0 0 10px">${helpTip(`依据资源（${c.gpu}）设置 RL 训练超参数：默认值已按所选 GPU 规模给出，可按需微调；每项参数旁的 ? 可查看该参数的调优方向。`)}</div>` +
       TRN_HP_DEFS.map(([k, cn, , hint]) =>
         field(`${k}（${cn}） ${helpTip(hint)}`, `<input class="input mono" data-hp="${k}" value="${esc(c.hp[k])}">`)).join('');
     $$('[data-hp]').forEach((x) => x.addEventListener('input', () => { c.hp[x.dataset.hp] = x.value; }));
