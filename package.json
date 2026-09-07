@@ -1,1 +1,8 @@
-{"name":"aisr-830-demo","scripts":{"dev":"node server.js"}}
+{
+  "name": "ai-range-930-demo",
+  "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "test": "node qa-v40.js"
+  }
+}

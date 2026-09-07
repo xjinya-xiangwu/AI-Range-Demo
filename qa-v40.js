@@ -1,0 +1,11 @@
+'use strict';
+const fs = require('fs');
+const assert = require('assert');
+const app = fs.readFileSync('app.js', 'utf8');
+const html = fs.readFileSync('index.html', 'utf8');
+const css = fs.readFileSync('styles.css', 'utf8');
+for (const route of ['workspace', 'training-data', 'production', 'legacy-data']) assert(app.includes(route), `missing route ${route}`);
+for (const label of ['训练用户', '监管用户', '开发者与企业用户', '数据引擎']) assert(html.includes(label) || app.includes(label), `missing label ${label}`);
+for (const capability of ['renderTrainingData930', 'renderProduction930', 'renderDataEngine930', '有效轨迹数据', '模型隐藏思维链']) assert(app.includes(capability), `missing capability ${capability}`);
+assert(css.includes('.role-switcher') && css.includes('.ai-loop'), 'missing 930 styles');
+console.log('930 static checks passed');

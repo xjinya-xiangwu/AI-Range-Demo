@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="tokens.css?v=392">
-<link rel="stylesheet" href="styles.css?v=392">
+<link rel="stylesheet" href="tokens.css?v=400">
+<link rel="stylesheet" href="styles.css?v=400">
 </head>
 <body>
   <div id="app">
@@ -19,61 +19,54 @@
         <span class="sb-mark serif">CR</span>
         <div class="sb-brand-text">
           <span class="sb-brand-name serif">网安攻防演练场</span>
-          <span class="sb-brand-sub">CYBERSEC RANGE · 830</span>
+          <span class="sb-brand-sub">CYBERSEC RANGE · 930</span>
         </div>
       </div>
+      <div class="role-switcher">
+        <label for="role-switch">当前用户空间</label>
+        <select id="role-switch" aria-label="切换用户空间">
+          <option value="training">训练用户 · 研究员</option>
+          <option value="regulatory">监管用户 · 评测人员</option>
+          <option value="enterprise">开发者与企业用户</option>
+        </select>
+        <small id="role-desc">消费授权数据集并回填效果</small>
+      </div>
       <nav class="sb-nav" id="sidenav">
-        <!-- 区块一 · 态势感知 -->
-        <a href="#/dashboard" data-route="dashboard">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.7 1.6 2.6 3.7 2.6 6S9.7 12.4 8 14c-1.7-1.6-2.6-3.7-2.6-6S6.3 3.6 8 2z"/></svg>
-          <span class="sb-label">态势感知</span>
-          <span class="sb-tip">态势感知</span>
+        <a href="#/workspace" data-route="workspace">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+          <span class="sb-label">角色总览</span><span class="sb-tip">角色总览</span>
         </a>
-        <!-- 区块二 · 操作中心 -->
-        <div class="sb-group">操作中心</div>
-        <div class="sb-l1" data-l1="test">
-          <button class="sb-l1-btn" type="button">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2" width="11" height="12" rx="1"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3"/></svg>
-            <span class="sb-label">测试任务</span><span class="sb-caret">▾</span>
-            <span class="sb-tip">测试任务</span>
-          </button>
-          <div class="sb-l2">
-            <a href="#/tasks" data-route="tasks"><span class="sb-label">任务中心</span><span class="run-dot" id="run-dot" style="display:none"></span><span class="judge-dot" id="judge-dot" style="display:none"></span></a>
-            <a href="#/range-hall" data-route="range-hall"><span class="sb-label">靶场大厅</span></a>
-          </div>
-        </div>
-        <div class="sb-l1" data-l1="train">
-          <button class="sb-l1-btn" type="button">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5 14.5 6 8 9.5 1.5 6z"/><path d="M4 7.5V11c0 1.1 1.8 2 4 2s4-.9 4-2V7.5"/></svg>
-            <span class="sb-label">训练任务</span><span class="sb-caret">▾</span>
-            <span class="sb-tip">训练任务</span>
-          </button>
-          <div class="sb-l2">
-            <a href="#/training" data-route="training"><span class="sb-label">任务中心</span></a>
-          </div>
-        </div>
-        <!-- 区块三 · 资源中心 -->
-        <div class="sb-group">资源中心</div>
+        <div class="sb-group">当前角色任务</div>
+        <a href="#/training-data" data-route="training-data" data-role-nav="training">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.5" rx="5.5" ry="2.2"/><path d="M2.5 3.5v8.5c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V3.5M2.5 7.8C2.5 9 5 10 8 10s5.5-1 5.5-2.2"/></svg>
+          <span class="sb-label">训练数据消费</span><span class="sb-tip">训练数据消费</span>
+        </a>
+        <a href="#/tasks" data-route="regulatory" data-role-nav="regulatory">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2h8v12H4z"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
+          <span class="sb-label">监管评测</span><span class="run-dot" id="run-dot" style="display:none"></span><span class="judge-dot" id="judge-dot" style="display:none"></span><span class="sb-tip">监管评测</span>
+        </a>
+        <a href="#/production" data-route="production" data-role-nav="enterprise">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 5h12v8H2zM5 2h6v3H5z"/><path d="M5 9h6M8 6v6"/></svg>
+          <span class="sb-label">数据生产</span><span class="sb-tip">数据生产</span>
+        </a>
+        <div class="sb-group">共享能力</div>
         <a href="#/data" data-route="data">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.5" rx="6" ry="2.5"/><path d="M2 3.5v9c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-9"/><path d="M2 8c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/></svg>
-          <span class="sb-label">数据中心</span>
-          <span class="sb-tip">数据中心</span>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3h12v10H2z"/><path d="M5 6h6M5 9h6"/></svg>
+          <span class="sb-label">数据引擎</span><span class="sb-tip">数据引擎</span>
+        </a>
+        <a href="#/range-hall" data-route="range-hall">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 13V6l6-4 6 4v7z"/><path d="M5 13V9h6v4"/></svg>
+          <span class="sb-label">场景与任务库</span><span class="sb-tip">场景与任务库</span>
         </a>
         <a href="#/gateway" data-route="gateway">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 8.5 10 4.5M8 10.5l2-2M4 12l-1.5 1.5a2.1 2.1 0 1 1-3-3L3 7m10 5 1.5 1.5a2.1 2.1 0 1 0 3-3L13 7" transform="translate(0,-1)"/></svg>
-          <span class="sb-label">接入网关</span>
-          <span class="sb-tip">接入网关</span>
+          <span class="sb-label">资源接入</span><span class="sb-tip">资源接入</span>
         </a>
-        <div class="sb-l1" data-l1="user">
-          <button class="sb-l1-btn" type="button">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5" r="2.6"/><path d="M2.5 14c.8-2.6 2.9-4 5.5-4s4.7 1.4 5.5 4"/></svg>
-            <span class="sb-label">用户设置</span><span class="sb-caret">▾</span>
-            <span class="sb-tip">用户设置</span>
-          </button>
-          <div class="sb-l2">
-            <a href="#/settings" data-route="settings"><span class="sb-label">个人中心</span></a>
-          </div>
-        </div>
+        <div class="sb-group">系统</div>
+        <a href="#/settings" data-route="settings">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5" r="2.6"/><path d="M2.5 14c.8-2.6 2.9-4 5.5-4s4.7 1.4 5.5 4"/></svg>
+          <span class="sb-label">个人与权限</span><span class="sb-tip">个人与权限</span>
+        </a>
       </nav>
       <div class="sb-spacer"></div>
       <button class="sb-collapse" id="sb-collapse" title="收起导航">« <span class="sb-label">收起导航</span></button>
@@ -114,7 +107,7 @@
   <!-- 弹窗挂载点 -->
   <div id="modal-root"></div>
 
-  <script src="data.js?v=392"></script>
-  <script src="app.js?v=392"></script>
+  <script src="data.js?v=400"></script>
+  <script src="app.js?v=400"></script>
 </body>
 </html>

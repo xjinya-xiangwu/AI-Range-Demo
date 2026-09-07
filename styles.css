@@ -1589,3 +1589,45 @@ body.auth-mode #view { margin-left: 0; }
 /* 大屏下事件流更高 */
 .dash-pro .dash-events { max-height: 240px; }
 @media (max-width: 1280px) { .dp-grid { grid-template-columns: 1fr; } }
+
+
+/* 930 三类用户空间 */
+.role-switcher { margin: 0 12px 14px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
+.role-switcher label { display:block; margin-bottom:6px; color:var(--muted-foreground); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+.role-switcher select { width:100%; padding:8px 9px; color:var(--foreground); background:var(--card); border:1px solid var(--border); border-radius:var(--radius); font:500 12px var(--font-sans); }
+.role-switcher small { display:block; margin-top:7px; line-height:1.45; color:var(--muted-foreground); font-size:10px; }
+.sidebar.collapsed .role-switcher { display:none; }
+.role-hero { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(300px,.6fr); gap:18px; margin-bottom:22px; }
+.role-hero-main { padding:24px; border:1px solid color-mix(in srgb,var(--primary) 45%,var(--border)); border-radius:var(--radius-lg); background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 13%,var(--card)),var(--card)); }
+.role-kicker { color:var(--primary); font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+.role-hero h2 { margin:8px 0; font:600 34px var(--font-serif); }
+.role-hero p { max-width:760px; color:var(--muted-foreground); line-height:1.8; }
+.role-hero-side { padding:20px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card); }
+.role-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-bottom:24px; }
+.role-card { padding:18px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card); }
+.role-card.active { border-color:var(--primary); box-shadow:0 0 0 1px color-mix(in srgb,var(--primary) 35%,transparent); }
+.role-card h3 { margin:0 0 7px; font-size:15px; }
+.role-card p { min-height:46px; color:var(--muted-foreground); font-size:12px; line-height:1.6; }
+.metric-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0 24px; }
+.metric-tile { padding:15px; border:1px solid var(--border); border-radius:var(--radius); background:var(--card); }
+.metric-tile b { display:block; margin-top:6px; font:500 24px var(--font-mono); }
+.metric-tile small { color:var(--muted-foreground); }
+.dataset-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.dataset-card { padding:18px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--card); }
+.dataset-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.dataset-card h3 { margin:0 0 6px; font-size:15px; }
+.dataset-card .dataset-meta { display:flex; flex-wrap:wrap; gap:8px; margin:13px 0; }
+.dataset-card .dataset-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; padding-top:13px; border-top:1px solid var(--border); }
+.privacy-p0 { color:var(--chart-3); border-color:var(--chart-3); }
+.privacy-p1 { color:var(--primary); border-color:var(--primary); }
+.privacy-p2 { color:var(--chart-4); border-color:var(--chart-4); }
+.ai-loop { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; margin:16px 0 22px; }
+.ai-step { position:relative; padding:14px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--card); text-align:center; }
+.ai-step:not(:last-child)::after { content:'→'; position:absolute; right:-9px; top:50%; z-index:2; color:var(--primary); transform:translateY(-50%); }
+.ai-step b { display:block; margin-bottom:5px; font-size:12px; }
+.ai-step small { color:var(--muted-foreground); font-size:10px; line-height:1.45; }
+.ai-step.done { border-color:var(--chart-3); background:color-mix(in srgb,var(--chart-3) 8%,var(--card)); }
+.ai-step.active { border-color:var(--primary); background:color-mix(in srgb,var(--primary) 10%,var(--card)); }
+.policy-note { padding:12px 14px; border-left:3px solid var(--chart-4); background:color-mix(in srgb,var(--chart-4) 8%,var(--card)); color:var(--muted-foreground); font-size:12px; line-height:1.7; }
+@media (max-width:1100px) { .role-grid,.metric-strip { grid-template-columns:repeat(2,minmax(0,1fr)); } .role-hero { grid-template-columns:1fr; } .ai-loop { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:760px) { .role-grid,.metric-strip,.dataset-grid { grid-template-columns:1fr; } .ai-loop { grid-template-columns:repeat(2,minmax(0,1fr)); } }
