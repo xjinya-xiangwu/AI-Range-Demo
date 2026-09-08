@@ -1,2 +1,4 @@
 node_modules/
 qa-shot-*.png
+
+.server-*.log

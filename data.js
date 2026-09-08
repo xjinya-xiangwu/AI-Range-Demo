@@ -1041,10 +1041,11 @@ const OV_GPU = { nodes: 8, model: 'H100', util: 76, temp: 62, power: 610, io: 3.
 /* ── 训练场 · 训练任务（TR-01/02，全 Mock）────────────────────── */
 const TRN_TYPES = ['CPT 继续预训练', 'RL 强化学习', 'SFT 监督微调', 'DPO 偏好优化'];
 const TRN_DATASETS = [
-  '全量样本 15,240 条（开源 10,240 + 自研 5,000）',
-  '仅 T3+ 高难度样本 2,137 条',
-  '自研漏利数据 5,000 条',
-  '开源套件样本 10,240 条',
+  '实验室私有轨迹包 v1.3（41,280 条 · P1 受控挂载）',
+  '私有修复偏好对 v2.0（4,200 对 · DPO）',
+  '私有工具调用与失败恢复包 v2.1（18,640 条 · SFT / PRM）',
+  '开源安全基线包 v3（10,240 条）',
+  '公开 + 私有混合配方 0930（私有占比 68%）',
 ];
 const TRN_BENCHMARKS = ['ExploitGym', 'CyberGym', 'Cybench', 'RealVuln v2'];
 const TRN_PIPELINE = [

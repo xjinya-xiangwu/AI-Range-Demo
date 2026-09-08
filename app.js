@@ -69,70 +69,74 @@ function openModal(html, wide) {
 }
 function closeModal() { $('#modal-root').innerHTML = ''; }
 
-/* ══ 路由（含 SSO 鉴权门：未登录一律回落 #/login）═══════════════════ */
+/* ══ 路由（角色独立产品空间 + SSO 鉴权门）═════════════════════════ */
 const ROUTE_ALIASES = {
-  '': 'workspace', overview: 'workspace', portal: 'workspace', home: 'workspace', dashboard: 'workspace',
+  '': 'role-home', overview: 'role-home', portal: 'role-home', home: 'role-home', workspace: 'role-home', dashboard: 'role-home',
+  training: 'research/training', 'training-data': 'research/private-data',
+  tasks: 'regulatory/evaluations', marketplace: 'regulatory/evaluations',
+  production: 'developer/pipelines', data: 'developer/datasets',
+  'developer/home': 'developer/overview',
+  'developer/trajectories': 'developer/annotation', 'developer/evidence': 'developer/annotation',
+  'developer/feedback': 'developer/annotation', 'developer/runs': 'developer/annotation',
   collaborate: 'confirm', results: 'confirm', report: 'confirm', 'result-detail': 'confirm',
-  resources: 'range-hall', sandbox: 'range-hall', users: 'settings', marketplace: 'tasks',
+  resources: 'range-hall', sandbox: 'range-hall', users: 'settings',
 };
 const NAV_OF = {
-  workspace: 'workspace',
-  'training-data': 'training-data',
-  production: 'production',
-  tasks: 'regulatory', workbench: 'regulatory',
-  'range-hall': 'range-hall', range: 'range-hall', 'range-detail': 'range-hall',
-  confirm: 'tasks',
-  training: 'training', 'training-live': 'training', models: 'models',
-  battle: 'battle',
-  data: 'data', 'legacy-data': 'data',
-  gateway: 'gateway',
-  settings: 'settings', monitor: 'monitor', tools: 'tools',
+  'research/training': 'research/training', 'training-live': 'research/training', models: 'research/compare',
+  'research/compare': 'research/compare', 'research/private-data': 'research/private-data',
+  'regulatory/evaluations': 'regulatory/evaluations', workbench: 'regulatory/evaluations', confirm: 'regulatory/evaluations', range: 'regulatory/evaluations',
+  'developer/overview': 'developer/overview', 'developer/datasets': 'developer/datasets', 'legacy-data': 'developer/datasets',
+  'developer/annotation': 'developer/annotation',
+  'developer/pipelines': 'developer/pipelines', 'range-hall': 'developer/pipelines', 'range-detail': 'developer/pipelines',
+  gateway: 'gateway', settings: 'settings',
 };
 const AUTH_ROUTES = ['login'];
 function parseHash() {
-  const raw = location.hash.replace(/^#\/?/, '') || 'workspace';
+  const raw = location.hash.replace(/^#\/?/, '') || 'role-home';
   const [path, qs] = raw.split('?');
   const params = {};
   if (qs) qs.split('&').forEach((kv) => { const [k, v] = kv.split('='); params[k] = decodeURIComponent(v || ''); });
-  return { route: path || 'dashboard', params };
+  return { route: path || 'role-home', params };
 }
 function router() {
   clearTimers(); closeModal(); closeUserPop(); closeDlPop(); hideTopoTip(); closeRgPops();
   const { route, params } = parseHash();
   const r = ROUTE_ALIASES[route] || route;
-  /* SSO 鉴权门（AC-01/02 · 真实 SSO 的演示替身） */
   const authed = sessionStorage.getItem('cr-auth') === '1';
   if (!authed && !AUTH_ROUTES.includes(r)) { location.hash = '#/login'; return; }
   document.body.classList.toggle('auth-mode', AUTH_ROUTES.includes(r));
   if (AUTH_ROUTES.includes(r)) { renderLogin(); window.scrollTo(0, 0); return; }
-  /* 工作台运行中小圆点（sidebar · 测试任务项） */
+
+  applyRoleNavigation();
+  if (r === 'role-home') { location.hash = roleHome(currentRole()); return; }
+  if (!roleRouteAllowed(currentRole(), r)) { location.hash = roleHome(currentRole()); return; }
+
   const dot = $('#run-dot');
   if (dot) dot.style.display = sessionStorage.getItem('aisr-running') === '1' ? '' : 'none';
   const jd = $('#judge-dot');
   if (jd) jd.style.display = judgeOpenCount() > 0 ? '' : 'none';
-  const nav = NAV_OF[r] || 'dashboard';
+  const nav = NAV_OF[r];
   $$('#sidenav a[data-route]').forEach((a) => a.classList.toggle('active', a.dataset.route === nav));
-  $$('#sidenav .sb-l1').forEach((box) => box.classList.toggle('active-child', !!box.querySelector('a.active')));
-  if (r === 'workspace') renderRoleWorkspace();
-  else if (r === 'training-data') renderTrainingData930();
-  else if (r === 'production') renderProduction930();
+
+  if (r === 'research/training') renderTraining();
+  else if (r === 'research/compare') renderTrainingCompare930();
+  else if (r === 'research/private-data') renderResearchPrivateData930();
+  else if (r === 'regulatory/evaluations') renderTasks();
+  else if (r === 'developer/overview') renderEnterpriseOverview930();
+  else if (r === 'developer/datasets') renderDataEngine930();
+  else if (r === 'developer/annotation') renderEnterpriseAnnotationWorkbench930();
+  else if (r === 'developer/pipelines') renderProduction930();
   else if (r === 'legacy-data') renderDataCenter();
   else if (r === 'workbench') renderWorkbench();
   else if (r === 'range') renderRange();
-  else if (r === 'tasks') renderTasks();
   else if (r === 'range-hall') renderRangeHall();
   else if (r === 'range-detail') renderRangeDetail(params.env || 'SCN-01');
   else if (r === 'confirm') renderTasks();
-  else if (r === 'training') renderTraining();
   else if (r === 'training-live') renderTrainingLive();
   else if (r === 'models') renderModels();
-  else if (r === 'battle') renderBattle();
-  else if (r === 'data') renderDataEngine930();
   else if (r === 'gateway') renderGateway();
   else if (r === 'settings') renderSettings();
-  else if (r === 'monitor') renderMonitor();
-  else if (r === 'tools') renderTools();
-  else renderRoleWorkspace();
+  else location.hash = roleHome(currentRole());
   window.scrollTo(0, 0);
 }
 
@@ -158,23 +162,24 @@ const catShort = (id) => (CATEGORIES.find((c) => c.id === id) || {}).short || id
 const sims = SIM_RUNS.map(() => ({ idx: 0, tick: 0, started: Date.now() }));
 
 function renderTasks() {
+  applyRoleNavigation();
   const userRunning = sessionStorage.getItem('aisr-running') === '1';
   rangeState.scene = 'corp';
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    <div class="space-eyebrow">监管空间 / 可信评测</div>
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">测试任务 ${helpTip('创建并跟踪测试任务：选择任务类型（评测 / 靶场二选一）→ 选择环境与题集 → 选择模型 / Agent → 设置安全约束 → 提交运行。运行中任务点击进入执行详情（仅观察），执行中的风险点会实时进入研判队列。')}</h2>
-        <p class="page-desc">评测任务（纯代码评测 · 选测试题集）/ 靶场任务（靶场环境评测 · 选靶场环境）二选一，统一创建入口 · 选类型 → 选环境与题集 → 选模型/Agent → 安全约束 → 提交运行</p>
+        <h2 class="page-title">评测任务 ${helpTip('冻结待测对象、任务集、环境和评分规则后执行评测；争议结果完成证据确认后才能生成报告。')}</h2>
+        <p class="page-desc">创建冻结评测任务 → 查看运行状态 → 确认证据 → 生成可复现、可审计报告</p>
       </div>
       <button class="btn btn-primary" id="btn-new-task">新建评测任务</button>
     </div>
     <div class="stats-row">
-      <div class="card"><div class="card-sub">累计任务</div><div class="stat-num">2,103</div></div>
       <div class="card"><div class="card-sub">运行中</div><div class="stat-num" style="color:var(--primary)">${SIM_RUNS.length + (userRunning ? 1 : 0)}</div></div>
-      <div class="card"><div class="card-sub">排队中</div><div class="stat-num" style="color:var(--chart-4)">23</div></div>
-      <div class="card"><div class="card-sub">今日完成</div><div class="stat-num" style="color:var(--chart-3)">417</div></div>
+      <div class="card"><div class="card-sub">待确认</div><div class="stat-num" style="color:var(--chart-4)">${judgeOpenCount()}</div></div>
+      <div class="card"><div class="card-sub">已完成</div><div class="stat-num" style="color:var(--chart-3)">18</div></div>
+      <div class="card"><div class="card-sub">失败</div><div class="stat-num">1</div></div>
     </div>
     <div class="history-head">运行中任务队列<span class="head-badge">点击查看执行详情 · 仅观察</span></div>
     <div class="runwin-grid" id="runwin-grid" style="margin-bottom:32px"></div>
@@ -2647,7 +2652,7 @@ function renderData() {
         <td class="dl-cell"><button class="btn btn-ghost btn-sm dl-btn" data-row-dl="${kind}:${idx}" ${canDownload ? '' : 'disabled title="viewer 角色仅可查看"'}>${ICO.download}</button></td>`;
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">数据中心</h2>
@@ -2962,6 +2967,7 @@ $('#theme-toggle').addEventListener('click', toggleTheme);
 $('#theme-icon').textContent = document.documentElement.classList.contains('dark') ? '◑' : '◐';
 initSidebar();
 initUserCenter();
+initRoleSwitcher();
 window.addEventListener('hashchange', router);
 /* 画布尺寸变化时关闭图内浮层（避免错位残留） */
 window.addEventListener('resize', () => { closeRgPops(); hideTopoTip(); });
@@ -3625,11 +3631,12 @@ function trnTaskCard(t, i) {
 }
 
 function renderTraining() {
+  applyRoleNavigation();
   const cnt = (s) => trnState.tasks.filter((t) => t.status === s).length;
   const ordered = [...trnState.tasks].sort((a, b) => (b.pinned - a.pinned));
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">任务中心 ${helpTip('通过 5 步向导创建训练任务（基本信息 → 数据与基准 → 模型与算法 → 超参数 → 资源与确认）。任务列表实时展示运行 / 排队 / 完成 / 评估四种状态，可暂停或终止，训练流水线五阶段点击查看说明。')}</h2>
@@ -3961,7 +3968,7 @@ function renderBattle() {
 function renderRangeHall() {
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">场景与任务库 ${helpTip('浏览全部靶场环境：演示场景、常驻靶场环境与漏洞环境库。查看环境拓扑、漏洞面、可利用与诱饵节点；可直接选用环境发起测试任务，或进入控制台观察运行中的演练。')}</h2>
@@ -4346,13 +4353,13 @@ function renderLogin(mode) {
       ${card}
       <p class="mini-note" style="margin-top:14px">接实验室现有 SSO · 登录 / 注册 / 忘记密码均走 SSO 流程</p>
     </div>
-    <div class="auth-foot muted small">训练数据消费 · 监管评测 · 企业轨迹生产</div>
+    <div class="auth-foot muted small">研究员训练 · 监管评测 · 企业数据生产</div>
   </div>`;
   $$('[data-lg]').forEach((a) => a.addEventListener('click', () => renderLogin(a.dataset.lg)));
   const go = $('#lg-go');
   if (go) go.addEventListener('click', () => {
     sessionStorage.setItem('cr-auth', '1');
-    location.hash = '#/workspace';
+    location.hash = roleHome(currentRole());
   });
   const rg = $('#rg-go');
   if (rg) rg.addEventListener('click', () => { renderLogin('login'); showToast('注册请求已提交 SSO · 请查收验证邮件'); });
@@ -4790,7 +4797,7 @@ function renderConfirm() {
   const tasks = [...PRESET_RESULTS, ...HISTORY_TASKS];
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">结果确认 ${helpTip('在这里完成测试结果的确认与报告产出：先在「协同研判」逐条办结待确认的风险点工单（确认 / 改判 / 驳回），全部办结后即可生成评测报告；下方报告任务列表支持查看报告与批量导出。')}</h2>
@@ -4915,7 +4922,7 @@ function renderSettings() {
   const keys = gwKeys();
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">个人与权限 ${helpTip('管理你的账号：个人资料、安全设置（密码）、登录与操作记录、我的 API 密钥（与接入网关同源）。')}</h2>
@@ -4972,7 +4979,7 @@ function renderSettings() {
 function renderMonitor() {
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">监控中心 ${helpTip('业务安全监测总览：高危漏洞处置、风险行为告警与网络流量概况，附 GPU 等资源运行摘要。')}</h2>
@@ -5162,7 +5169,7 @@ function renderGateway() {
 
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">资源接入</h2>
@@ -5400,7 +5407,7 @@ function hallUseEnv(envId) {
 function renderRangeHall() {
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">场景与任务库 ${helpTip('平台预设的靶场环境清单：点击「查看环境详情」静态浏览环境拓扑与参数；点击「使用该环境创建任务」将该环境作为模板，直接跳转新建任务流程。')}</h2>
@@ -5513,7 +5520,6 @@ function renderRangeDetail(envId) {
 
 
 /* ══ 启动：全部状态初始化完成后首次渲染 ═══════════════════════ */
-router();
 
 
 /* ════════════════════════════════════════════════════════════════
@@ -5576,7 +5582,7 @@ function wbJudgeRender() {
 function renderDataCenter() {
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">数据中心 ${helpTip('平台的数据输出出口：测试与实战回流的轨迹数据集、风险数据集、测试题库、评测报告与模型版本在此汇聚，供训练任务与评测基准选用。测试题库由管理员统一上传维护。')}</h2>
@@ -5819,7 +5825,7 @@ function renderGateway() {
 
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    ${backLink(roleHome(currentRole()), roleInfo(currentRole()).space)}
     <div class="page-head-row">
       <div>
         <h2 class="page-title">资源接入 ${helpTip('外部模型 / Agent 的统一接入口：默认展示已接入对象及其任务量、Token 消耗、轨迹产出与成本；在密钥管理中创建接入密钥，按接入文档完成配置后发起校验，校验通过即可在测试任务中选用。')}</h2>
@@ -5980,6 +5986,7 @@ function renderRunWins() {
 }
 
 function renderTasks() {
+  applyRoleNavigation();
   const userRunning = sessionStorage.getItem('aisr-running') === '1';
   const runningN = TASK_QUEUE.filter((t) => t.status === 'running').length + (userRunning ? 1 : 0);
   const queuedN = TASK_QUEUE.filter((t) => t.status === 'queued').length;
@@ -6043,14 +6050,15 @@ function renderTasks() {
 
   $('#view').innerHTML = `
   <div class="page">
-    ${backLink('#/workspace', '角色总览')}
+    <div class="space-eyebrow">监管空间 / 可信评测</div>
     <div class="page-head-row">
       <div>
-        <h2 class="page-title">监管评测工作台 ${helpTip('测试任务的总览与入口：置顶的演示任务基于真实靶场环境持续运行，与态势感知首页的演示场景同源，点击「详情」可查看完整运行过程；运行中队列按创建时间降序展示；任务跑完后，需先在「结果确认」逐条办结待确认风险点，全部办结并生成评测报告后，下方已完成任务列表才会解锁。')}</h2>
-        <p class="page-desc">冻结条件下的模型与智能体测试 · 批次执行 · 证据复核 · 审计报告</p>
+        <h2 class="page-title">评测任务 ${helpTip('冻结待测对象、任务集、环境和评分规则后执行评测；争议结果完成证据确认后才能生成报告。')}</h2>
+        <p class="page-desc">创建冻结评测任务 → 查看运行状态 → 确认证据 → 生成可复现、可审计报告</p>
       </div>
       <button class="btn btn-primary" id="btn-new-task">新建评测任务</button>
     </div>
+    <div class="metric-strip"><div class="metric-tile"><small>运行中</small><b>${runningN}</b></div><div class="metric-tile"><small>待确认</small><b>${judgeOpenCount()}</b></div><div class="metric-tile"><small>已完成</small><b>${doneTasks.length}</b></div><div class="metric-tile"><small>失败</small><b>1</b></div></div>
 
     <div class="history-head">结果确认 ${helpTip('任务跑完后，评测结果先进入自动初审；低置信或有争议的风险点会生成待确认工单，由你逐条确认 / 改判 / 驳回。全部工单办结后才能生成评测报告，报告生成后下方已完成任务列表解锁。')}<span class="head-badge">待确认 ${judgeOpenCount()} 项 · 全部办结后才能生成评测报告</span></div>
     ${judgeBlockHtml()}
@@ -6301,237 +6309,271 @@ function renderDashboard() {
 
 
 /* ════════════════════════════════════════════════════════════════
- * 页面 · 训练任务 · 任务中心（修订版：列表式，与测试任务中心一致）
+ * 研究员空间 · 训练任务、版本对比与私有数据增益
  * ════════════════════════════════════════════════════════════════ */
+const MODEL_COMPARE_930 = [
+  { id:'v2.0', name:'Mythos-Attack v2.0', note:'公开数据基线', privatePct:0, exploit:62.4, cyber:58.0, success:51.3, safety:82.1, cost:3.9 },
+  { id:'v2.1', name:'Mythos-Attack v2.1', note:'安全应答微调', privatePct:22, exploit:64.1, cyber:60.2, success:52.6, safety:94.0, cost:4.1 },
+  { id:'v2.2', name:'Mythos-Agent v2.2', note:'私有轨迹 RL', privatePct:55, exploit:73.8, cyber:69.5, success:65.8, safety:92.8, cost:4.6 },
+  { id:'v2.3', name:'Mythos-Agent v2.3', note:'私有混合配方候选', privatePct:68, exploit:78.6, cyber:74.9, success:71.4, safety:95.2, cost:4.4 },
+];
+const compareState930 = { left:'v2.0', right:'v2.3' };
+function compareVersion930(id) { return MODEL_COMPARE_930.find((v) => v.id === id) || MODEL_COMPARE_930[0]; }
+function metricDelta930(a, b, lowerBetter) {
+  const d = b - a;
+  const good = lowerBetter ? d <= 0 : d >= 0;
+  return `<span class="compare-delta ${good ? 'good' : 'bad'}">${d >= 0 ? '+' : ''}${d.toFixed(1)}</span>`;
+}
 function renderTraining() {
-  const cnt = (s) => trnState.tasks.filter((t) => t.status === s).length;
+  applyRoleNavigation();
+  const cnt = (status) => trnState.tasks.filter((t) => t.status === status).length;
   const ordered = [...trnState.tasks].sort((a, b) => (b.pinned - a.pinned));
-  $('#view').innerHTML = `
-  <div class="page">
-    ${backLink('#/workspace', '角色总览')}
-    <div class="page-head-row">
-      <div>
-        <h2 class="page-title">任务中心 ${helpTip('模型训练任务的创建与管理：6 步向导创建训练任务；置顶的演示任务与态势感知首页的训练面板同源，点击运行中任务的「实时监控」弹出任务详情与训练大屏；列表实时展示运行 / 排队 / 完成 / 评估状态，可终止，不可修改。')}</h2>
-        <p class="page-desc">训练任务的创建、调度与结果总览 · 进度实时跳动</p>
-      </div>
-      <button class="btn btn-primary" id="trn-new">新建训练任务</button>
-    </div>
-
-    <div class="history-head">训练流水线<span class="head-badge">点击阶段查看说明</span></div>
-    <div class="pipeline">
-      ${TRN_PIPELINE.map((p, i) => `
-      <div class="pl-stage${trnState.pipeSel === i ? ' current' : ''}" data-pipe="${i}">
-        <div class="pl-no">STAGE ${i + 1}</div><div class="pl-name">${p.name}</div>
-      </div>`).join('')}
-    </div>
-    <p class="mini-note" id="pipe-desc" style="margin:-8px 0 20px">${trnState.pipeSel >= 0 ? esc(TRN_PIPELINE[trnState.pipeSel].desc) : '数据准备（数据工厂）→ 训练配置 → 训练执行 → 实时监控大屏 → 发布备份（模型版本）'}</p>
-
-    <div class="history-head">运行中任务列表<span class="head-badge">演示任务置顶 · 创建时间降序 · 进度实时跳动</span></div>
-    <table class="report-table res-table-wrap" style="margin-bottom:28px">
-      <thead><tr><th>TRN_ID</th><th>任务</th><th>类型</th><th>数据集</th><th>资源</th><th>进度</th><th>状态</th><th></th></tr></thead>
-      <tbody>${ordered.filter((t) => t.status !== 'done').map((t) => {
-        const i = trnState.tasks.indexOf(t);
-        return `
-        <tr>
-          <td class="mono small">${t.id}${t.pinned ? ' <span class="badge badge-primary">演示任务</span>' : ''}</td>
-          <td><div style="font-weight:500">${esc(t.name)}</div><div class="small muted">${esc(t.goal)}</div></td>
-          <td><span class="badge badge-primary">${t.type.split(' ')[0]}</span></td>
-          <td class="small">${esc(t.dataset)}</td>
-          <td class="mono small">${t.gpu}</td>
-          <td><div style="display:flex;align-items:center;gap:8px">
-            <div class="prog-track" style="min-width:100px;flex:1"><div class="prog-fill" id="trn-fill-${i}" style="width:${t.progress}%"></div></div>
-            <span class="pct mono small" id="trn-pct-${i}">${t.progress}%</span></div>
-            <div class="small muted mono" id="trn-step-${i}">step ${t.step.toLocaleString()} / ${t.totalStep.toLocaleString()}</div></td>
-          <td><span class="badge ${TRN_STATUS_CLS[t.status]}">${TRN_STATUS_CN[t.status]}</span></td>
-          <td style="text-align:right;white-space:nowrap">
-            ${t.status === 'running' ? `
-              <button class="btn btn-ghost btn-sm" data-trn="stop:${i}" style="color:var(--destructive)">终止</button>
-              <button class="btn btn-outline btn-sm" data-trn="live:${i}">实时监控</button>` : ''}
-            ${t.status === 'queued' ? '<button class="btn btn-ghost btn-sm" data-trn="stop:' + i + '">取消排队</button>' : ''}
-            ${t.status === 'evaluating' ? '<span class="mini-note" style="margin:0">门禁评估中</span>' : ''}
-            
-          </td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="8" class="small muted" style="text-align:center;padding:20px">暂无运行中 / 排队任务</td></tr>'}
-      </tbody>
-    </table>
-
-    <div class="history-head">已完成任务列表<span class="head-badge">${cnt('done')} 个</span></div>
-    <table class="report-table res-table-wrap">
-      <thead><tr><th>TRN_ID</th><th>任务</th><th>类型</th><th>数据集</th><th>资源</th><th>进度</th><th>状态</th><th></th></tr></thead>
-      <tbody>${ordered.filter((t) => t.status === 'done').map((t) => {
-        const i = trnState.tasks.indexOf(t);
-        return `
-        <tr>
-          <td class="mono small">${t.id}${t.pinned ? ' <span class="badge badge-primary">演示任务</span>' : ''}</td>
-          <td><div style="font-weight:500">${esc(t.name)}</div><div class="small muted">${esc(t.goal)}</div></td>
-          <td><span class="badge badge-primary">${t.type.split(' ')[0]}</span></td>
-          <td class="small">${esc(t.dataset)}</td>
-          <td class="mono small">${t.gpu}</td>
-          <td><div style="display:flex;align-items:center;gap:8px">
-            <div class="prog-track" style="min-width:100px;flex:1"><div class="prog-fill" style="width:100%"></div></div>
-            <span class="pct mono small">100%</span></div>
-            <div class="small muted mono">step ${t.totalStep.toLocaleString()} / ${t.totalStep.toLocaleString()}</div></td>
-          <td><span class="badge ${TRN_STATUS_CLS[t.status]}">${TRN_STATUS_CN[t.status]}</span></td>
-          <td style="text-align:right;white-space:nowrap">
-            <button class="btn btn-outline btn-sm" data-trn="expd:${i}">导出数据集</button>
-            <button class="btn btn-outline btn-sm" data-trn="expm:${i}">导出模型</button>
-          </td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="8" class="small muted" style="text-align:center;padding:20px">暂无已完成任务</td></tr>'}
-      </tbody>
-    </table>
-    <div class="small muted" style="margin-top:8px">共 ${trnState.tasks.length} 个任务 · 显示全部</div>
+  $('#view').innerHTML = `<div class="page">
+    <div class="space-eyebrow">研究员空间 / 训练任务</div>
+    <div class="page-head-row"><div><h2 class="page-title">训练任务 ${helpTip('这里只处理训练任务创建、排队、运行与结果入口；版本决策和私有数据管理拆到独立场景页面。')}</h2><p class="page-desc">创建训练 → 调度运行 → 监控指标 → 固定基准评估 → 进入版本决策</p></div><button class="btn btn-primary" id="trn-new">新建训练任务</button></div>
+    <div class="metric-strip"><div class="metric-tile"><small>运行中</small><b>${cnt('running')}</b></div><div class="metric-tile"><small>排队</small><b>${cnt('queued')}</b></div><div class="metric-tile"><small>待评估</small><b>${cnt('evaluating')}</b></div><div class="metric-tile"><small>本周新版本</small><b>${TRN_WEEK_NEW_VERSIONS}</b></div></div>
+    <div class="scene-entry-grid"><a href="#/research/private-data" class="scene-entry"><span class="badge badge-primary">训练输入</span><h3>实验室私有数据</h3><p>查看私有攻防轨迹、专家偏好与失败恢复数据的准入、授权和训练贡献。</p><b>管理训练数据 →</b></a><a href="#/research/compare" class="scene-entry"><span class="badge badge-olive">训练决策</span><h3>模型 / 智能体版本对比</h3><p>在冻结基准下比较能力、安全、成功率和成本，决定发布或继续训练。</p><b>进入版本对比 →</b></a></div>
+    <div class="history-head">训练流水线<span class="head-badge">数据版本和固定基准随任务冻结</span></div><div class="pipeline">${TRN_PIPELINE.map((p,i)=>`<div class="pl-stage${trnState.pipeSel===i?' current':''}" data-pipe="${i}"><div class="pl-no">STAGE ${i+1}</div><div class="pl-name">${p.name}</div></div>`).join('')}</div><p class="mini-note" id="pipe-desc" style="margin:-8px 0 20px">${trnState.pipeSel>=0?esc(TRN_PIPELINE[trnState.pipeSel].desc):'选择冻结数据版本 → 配置模型与资源 → 训练执行 → 固定基准评估 → 进入版本对比'}</p>
+    <div class="history-head">进行中的训练<span class="head-badge">点击实时监控查看任务详情</span></div><table class="report-table res-table-wrap" style="margin-bottom:28px"><thead><tr><th>TRN_ID</th><th>任务</th><th>类型</th><th>训练数据</th><th>资源</th><th>进度</th><th>状态</th><th></th></tr></thead><tbody>${ordered.filter((t)=>t.status!=='done').map((t)=>{const i=trnState.tasks.indexOf(t);return `<tr><td class="mono small">${t.id}${t.pinned?' <span class="badge badge-primary">演示任务</span>':''}</td><td><b>${esc(t.name)}</b><small>${esc(t.goal)}</small></td><td><span class="badge badge-primary">${t.type.split(' ')[0]}</span></td><td class="small">${esc(t.dataset)}</td><td class="mono small">${t.gpu}</td><td><div class="compare-value"><span class="mono small" id="trn-pct-${i}">${t.progress}%</span><div class="prog-track"><div class="prog-fill" id="trn-fill-${i}" style="width:${t.progress}%"></div></div><small class="mono" id="trn-step-${i}">step ${t.step.toLocaleString()} / ${t.totalStep.toLocaleString()}</small></div></td><td><span class="badge ${TRN_STATUS_CLS[t.status]}">${TRN_STATUS_CN[t.status]}</span></td><td>${t.status==='running'?`<button class="btn btn-ghost btn-sm" data-trn="stop:${i}" style="color:var(--destructive)">终止</button><button class="btn btn-outline btn-sm" data-trn="live:${i}">实时监控</button>`:t.status==='queued'?`<button class="btn btn-ghost btn-sm" data-trn="stop:${i}">取消排队</button>`:'<a class="btn btn-outline btn-sm" href="#/research/compare">查看评估</a>'}</td></tr>`;}).join('')}</tbody></table>
+    <div class="history-head">已完成训练<span class="head-badge">模型产物可进入版本对比</span></div><table class="report-table"><thead><tr><th>任务</th><th>训练数据</th><th>模型产物</th><th>固定基准</th><th>完成时间</th><th></th></tr></thead><tbody>${ordered.filter((t)=>t.status==='done').map((t)=>`<tr><td><b>${esc(t.name)}</b><small class="mono">${t.id}</small></td><td>${esc(t.dataset)}</td><td><span class="badge badge-olive">${t.name.includes('v2.1')?'v2.1':'v2.0'}</span></td><td>ExploitGym / CyberGym</td><td class="small">${t.created}</td><td><a class="btn btn-outline btn-sm" href="#/research/compare">加入对比</a></td></tr>`).join('')}</tbody></table>
   </div>`;
-
-  $$('[data-pipe]').forEach((el) => el.addEventListener('click', () => {
-    trnState.pipeSel = trnState.pipeSel === Number(el.dataset.pipe) ? -1 : Number(el.dataset.pipe);
-    renderTraining();
-  }));
-  $('#trn-new').addEventListener('click', openTrainingWizard);
-  $$('[data-trn]').forEach((b) => b.addEventListener('click', () => {
-    const [act, idx] = b.dataset.trn.split(':');
-    const t = trnState.tasks[Number(idx)];
-    if (act === 'stop') { t.status = 'done'; t.pinned = false; showToast(`${t.id} 已终止废弃`); renderTraining(); }
-    else if (act === 'live') openTrainingLiveModal();
-    else if (act === 'expd' || act === 'expm') showToast('数据导出功能开发中');
-  }));
-
-  /* 进度定时跳动 */
-  every(() => {
-    trnState.tasks.forEach((t, i) => {
-      if (t.status !== 'running') return;
-      t.step = Math.min(t.totalStep, t.step + 20 + Math.floor(Math.random() * 25));
-      t.progress = Math.round((t.step / t.totalStep) * 100);
-      const f = $('#trn-fill-' + i); if (f) f.style.width = t.progress + '%';
-      const p = $('#trn-pct-' + i); if (p) p.textContent = t.progress + '%';
-      const s = $('#trn-step-' + i); if (s) s.textContent = `step ${t.step.toLocaleString()} / ${t.totalStep.toLocaleString()}`;
-      if (t.progress >= 100) { t.status = 'evaluating'; renderTraining(); }
-    });
-  }, 2000);
+  $$('[data-pipe]').forEach((el)=>el.addEventListener('click',()=>{trnState.pipeSel=trnState.pipeSel===Number(el.dataset.pipe)?-1:Number(el.dataset.pipe);renderTraining();}));
+  $('#trn-new').addEventListener('click',openTrainingWizard);
+  $$('[data-trn]').forEach((b)=>b.addEventListener('click',()=>{const [act,idx]=b.dataset.trn.split(':');const t=trnState.tasks[Number(idx)];if(act==='stop'){t.status='done';t.pinned=false;showToast(`${t.id} 已终止废弃`);renderTraining();}else if(act==='live')openTrainingLiveModal();}));
+  every(()=>{trnState.tasks.forEach((t,i)=>{if(t.status!=='running')return;t.step=Math.min(t.totalStep,t.step+20+Math.floor(Math.random()*25));t.progress=Math.round(t.step/t.totalStep*100);const f=$('#trn-fill-'+i);if(f)f.style.width=t.progress+'%';const pct=$('#trn-pct-'+i);if(pct)pct.textContent=t.progress+'%';const step=$('#trn-step-'+i);if(step)step.textContent=`step ${t.step.toLocaleString()} / ${t.totalStep.toLocaleString()}`;if(t.progress>=100){t.status='evaluating';renderTraining();}});},2000);
+}
+function renderTrainingCompare930() {
+  applyRoleNavigation();
+  const left=compareVersion930(compareState930.left),right=compareVersion930(compareState930.right);
+  const metrics=[['ExploitGym','exploit','%',false],['CyberGym','cyber','%',false],['任务成功率','success','%',false],['安全门禁通过','safety','%',false],['千步成本','cost','K',true]];
+  const options=MODEL_COMPARE_930.map((v)=>`<option value="${v.id}">${v.name} · ${v.note}</option>`).join('');
+  $('#view').innerHTML=`<div class="page"><div class="space-eyebrow">研究员空间 / 版本决策</div><div class="page-head-row"><div><h2 class="page-title">模型 / 智能体版本对比</h2><p class="page-desc">固定任务集、环境、评分规则和重复次数，独立完成发布决策</p></div><button class="btn btn-primary" id="compare-run">发起同条件复测</button></div>
+    <div class="lineage-board"><div><small>模型谱系</small><h3>Mythos 攻防智能体</h3><p>从公开数据基线到实验室私有混合配方，所有训练输入与评测快照可追溯。</p></div><div class="lineage-row">${MODEL_COMPARE_930.map((v)=>`<span class="lineage-node ${v.id===right.id?'active':''}"><b>${v.id}</b><small>${v.note}</small></span>`).join('<i>→</i>')}</div></div>
+    <section class="version-compare"><div class="compare-selectors"><label>基线版本<select id="compare-left">${options}</select></label><span>VS</span><label>候选版本<select id="compare-right">${options}</select></label></div><table class="report-table compare-table"><thead><tr><th>指标</th><th>${left.name}<small>${left.note}</small></th><th>${right.name}<small>${right.note}</small></th><th>变化</th></tr></thead><tbody>${metrics.map(([label,key,unit,lower])=>`<tr><td>${label}</td><td class="mono">${left[key].toFixed(1)}${unit}</td><td><div class="compare-value"><span class="mono">${right[key].toFixed(1)}${unit}</span><div class="compare-bar"><i style="width:${Math.min(100,right[key])}%"></i></div></div></td><td>${metricDelta930(left[key],right[key],lower)}</td></tr>`).join('')}</tbody></table><div class="compare-verdict"><span class="badge badge-olive">推荐候选</span><b>${right.name}</b><span>私有数据占比 ${right.privatePct}% · 核心能力提升且安全门禁通过率 ${right.safety}%</span></div></section>
+    <div class="history-head">评测快照<span class="head-badge">同条件结果不可覆盖</span></div><table class="report-table"><thead><tr><th>快照</th><th>版本</th><th>任务集</th><th>环境</th><th>重复</th><th>结果</th><th>状态</th></tr></thead><tbody><tr><td class="mono">CMP-0930-018</td><td>${left.id} vs ${right.id}</td><td>ExploitGym v3 + CyberGym v2</td><td>ENV-SNAP-0907</td><td>5 次</td><td>${right.success}% 成功率</td><td><span class="badge badge-olive">已冻结</span></td></tr><tr><td class="mono">CMP-0930-017</td><td>v2.1 vs v2.2</td><td>安全红线全集 v830</td><td>ENV-SNAP-0905</td><td>3 次</td><td>v2.2 能力提升，安全回退</td><td><span class="badge badge-gold">需复核</span></td></tr></tbody></table></div>`;
+  $('#compare-left').value=left.id;$('#compare-right').value=right.id;
+  $('#compare-left').addEventListener('change',(e)=>{compareState930.left=e.target.value;renderTrainingCompare930();});
+  $('#compare-right').addEventListener('change',(e)=>{compareState930.right=e.target.value;renderTrainingCompare930();});
+  $('#compare-run').addEventListener('click',()=>showToast(`已创建 ${left.id} 与 ${right.id} 的同条件复测（演示）`));
+}
+function renderResearchPrivateData930() {
+  applyRoleNavigation();
+  $('#view').innerHTML=`<div class="page"><div class="space-eyebrow">研究员空间 / 训练输入</div><div class="page-head-row"><div><h2 class="page-title">实验室私有数据</h2><p class="page-desc">受控接入、质量准入、训练挂载与效果归因独立管理</p></div><button class="btn btn-primary" id="private-sync">同步私有数据源</button></div>
+    <div class="private-source-banner"><div><span class="live-dot"></span><b>安全实验室私有数据网关</b><small>3 / 3 数据源已连接 · 最近同步 16:52</small></div><div><span>本周期新增</span><b>64.1K</b><small>轨迹 / 步骤 / 偏好对</small></div><div><span>训练任务引用</span><b>7</b><small>全部受控挂载</small></div><div><span>隐私事件</span><b>0</b><small>跨项目默认禁止</small></div></div>
+    <div class="research-focus-grid"><section class="research-panel private-data-panel"><div class="panel-kicker">PRIVATE MIX</div><h3>公开与私有数据组合</h3><p>原始敏感数据不离开私有空间，训练任务只引用冻结版本和授权用途。</p><div class="private-mix"><div class="mix-public" style="width:32%">公开 32%</div><div class="mix-private" style="width:68%">实验室私有 68%</div></div><div class="private-stats"><div><b>41,280</b><span>攻防运行轨迹</span></div><div><b>4,200</b><span>专家偏好对</span></div><div><b>18,640</b><span>失败恢复步骤</span></div></div></section><section class="research-panel"><div class="panel-kicker">ATTRIBUTION</div><h3>训练收益归因</h3><p>只在冻结基准下展示私有数据带来的可验证差异。</p><div class="private-gain"><span>任务成功率</span><b>51.3% → 71.4%</b><em>+20.1 pt</em></div><div class="private-gain"><span>安全门禁通过</span><b>82.1% → 95.2%</b><em>+13.1 pt</em></div><a class="btn btn-outline" href="#/research/compare">查看完整版本对比</a></section></div>
+    <div class="history-head">训练准入数据<span class="head-badge">版本、许可与用途冻结</span></div><table class="report-table"><thead><tr><th>数据版本</th><th>数据类型</th><th>来源</th><th>规模</th><th>质量规则</th><th>消费方式</th><th>状态</th></tr></thead><tbody><tr><td><b>lab-trace-2026.09-r3</b><small class="mono">DS-TRACE-0930-01</small></td><td>RL / GRPO 轨迹</td><td>企业授权靶场回流</td><td>41,280 条</td><td>证据完整 + 可重放</td><td>私有空间挂载</td><td><span class="badge badge-olive">可训练</span></td></tr><tr><td><b>lab-preference-2026.09-r2</b><small class="mono">DS-DPO-0930-04</small></td><td>DPO 偏好对</td><td>实验室专家双人复核</td><td>4,200 对</td><td>偏好一致性 ≥ 95%</td><td>受控查询</td><td><span class="badge badge-olive">可训练</span></td></tr><tr><td><b>lab-process-2026.09-r1</b><small class="mono">DS-PRM-0930-05</small></td><td>PRM 步骤标签</td><td>失败恢复轨迹</td><td>18,640 步</td><td>步骤标签已复核</td><td>私有空间挂载</td><td><span class="badge badge-gold">构建中</span></td></tr></tbody></table>
+    <div class="history-head">最近训练引用<span class="head-badge">数据 → 任务 → 模型 → 评测全程关联</span></div><table class="report-table"><thead><tr><th>训练任务</th><th>训练数据</th><th>目标版本</th><th>固定基准</th><th>授权状态</th></tr></thead><tbody><tr><td>TRN-2026-0413</td><td>私有轨迹 55% + 公开基线 45%</td><td>Mythos-Agent v2.2</td><td>ExploitGym / CyberGym</td><td><span class="badge badge-olive">已授权</span></td></tr><tr><td>TRN-2026-0415</td><td>私有混合配方 68%</td><td>Mythos-Agent v2.3</td><td>四套冻结基准</td><td><span class="badge badge-olive">已授权</span></td></tr></tbody></table></div>`;
+  $('#private-sync').addEventListener('click',()=>showToast('私有数据源已同步，新增 326 条准入记录（演示）'));
 }
 
 /* ════════════════════════════════════════════════════════════════
- * 930 增量 · 三类用户空间与 AI 原生数据闭环
- * 在旧 Demo 的任务、靶场和接入能力上增量建设，不复制训练调度。
+ * 930 重构 · 一个底座，三个独立产品空间
+ * 共享能力进入角色流程，不再作为公共一级导航。
  * ════════════════════════════════════════════════════════════════ */
 function currentRole() { return localStorage.getItem('aisr-role-930') || 'training'; }
-function roleHome(role) { return role === 'regulatory' ? '#/tasks' : role === 'enterprise' ? '#/production' : '#/training-data'; }
+function roleHome(role) {
+  return role === 'regulatory' ? '#/regulatory/evaluations'
+    : role === 'enterprise' ? '#/developer/overview' : '#/research/training';
+}
 function roleInfo(role) {
   return {
-    training: { label: '训练用户 · 实验室研究员', short: '训练用户', desc: '消费授权数据集，在私有空间完成后训练或策略迭代，并回填固定基准效果。', action: '进入训练数据消费', color: 'var(--primary)' },
-    regulatory: { label: '监管用户 · 评测人员', short: '监管用户', desc: '在冻结环境、任务与评分规则下运行模型或 Agent 测试，形成可复现、可审计报告。', action: '进入监管评测', color: 'var(--chart-2)' },
-    enterprise: { label: '开发者与企业用户', short: '开发者与企业用户', desc: '复用编排好的靶场任务，接入 Agent 或环境，批量 Roll 并交付结构化轨迹数据。', action: '进入数据生产', color: 'var(--chart-4)' },
+    training: { name: '实验室研究员', space: '研究员空间', avatar: '研', desc: '训练、版本决策与私有数据' },
+    regulatory: { name: '监管评测人员', space: '监管空间', avatar: '评', desc: '评测任务与可信报告' },
+    enterprise: { name: '开发者与企业用户', space: '企业空间', avatar: '企', desc: '数据治理与生产闭环' },
   }[role] || null;
+}
+function roleRouteAllowed(role, route) {
+  const routes = {
+    training: ['research/training', 'research/compare', 'research/private-data', 'training-live', 'models', 'settings'],
+    regulatory: ['regulatory/evaluations', 'workbench', 'confirm', 'range', 'settings'],
+    enterprise: ['developer/overview', 'developer/datasets', 'developer/pipelines', 'developer/annotation', 'gateway', 'range-hall', 'range-detail', 'legacy-data', 'settings'],
+  };
+  return (routes[role] || []).includes(route);
+}
+function roleNavItems(role) {
+  const icons = {
+    training: '<path d="M3 3h10v3H3zM4 6v7h8V6M6 9h4M6 11h3"/>',
+    compare: '<path d="M2 12h12M3 10l3-3 2 2 4-5M9 4h3v3"/>',
+    privateData: '<path d="M3 5h10v8H3zM5 5V3h6v2M6 8h4M6 10h3"/>',
+    evaluation: '<path d="M4 2h8v12H4zM6 5h4M6 8h4M6 11h2"/>',
+    overview: '<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>',
+    trajectory: '<path d="M3 13V3M3 5h4l2 3h4M6 11h7"/><circle cx="3" cy="3" r="1"/><circle cx="13" cy="8" r="1"/><circle cx="13" cy="11" r="1"/>',
+    evidence: '<path d="M8 2 13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4zM6 8l1.4 1.4L10.5 6"/>',
+    feedback: '<path d="M3 3h10v7H8l-3 3v-3H3zM6 6h4M6 8h3"/>',
+    annotation: '<path d="M3 13h10M4 10l6-6 2 2-6 6H4zM9 5l2 2"/>',
+    dataset: '<ellipse cx="8" cy="3.5" rx="5.5" ry="2.2"/><path d="M2.5 3.5v8.5c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V3.5M2.5 7.8C2.5 9 5 10 8 10s5.5-1 5.5-2.2"/>',
+    pipeline: '<path d="M2 4h4v4H2zM10 8h4v4h-4zM6 6h4M8 6v4M8 10h2"/>',
+    gateway: '<path d="M6 8.5 10 4.5M8 10.5l2-2M4 12l-1.5 1.5a2.1 2.1 0 1 1-3-3L3 7m10 5 1.5 1.5a2.1 2.1 0 1 0 3-3L13 7" transform="translate(0,-1)"/>',
+    settings: '<circle cx="8" cy="5" r="2.6"/><path d="M2.5 14c.8-2.6 2.9-4 5.5-4s4.7 1.4 5.5 4"/>',
+  };
+  if (role === 'training') return { groups:[{label:'训练工作',items:[['research/training','训练任务',icons.training],['research/compare','版本对比',icons.compare],['research/private-data','私有数据',icons.privateData]]}], settings:['settings','个人与权限',icons.settings] };
+  if (role === 'regulatory') return { groups:[{label:'核心工作',items:[['regulatory/evaluations','评测任务',icons.evaluation]]}], settings:['settings','个人与权限',icons.settings] };
+  return { groups:[
+    {label:'数据生产',items:[['developer/overview','总览',icons.overview],['developer/datasets','数据资产',icons.dataset],['developer/pipelines','生产任务',icons.pipeline],['developer/annotation','标注工作台',icons.annotation]]},
+    {label:'接入管理',items:[['gateway','Agent 与环境',icons.gateway]]},
+  ], settings:['settings','个人与权限',icons.settings] };
+}
+function navItem930(route, label, icon) {
+  const dots = route === 'regulatory/evaluations' ? '<span class="run-dot" id="run-dot" style="display:none"></span><span class="judge-dot" id="judge-dot" style="display:none"></span>' : '';
+  return `<a href="#/${route}" data-route="${route}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">${icon}</svg><span class="sb-label">${label}</span>${dots}<span class="sb-tip">${label}</span></a>`;
 }
 function applyRoleNavigation() {
   const role = currentRole();
-  $$('[data-role-nav]').forEach((el) => { el.hidden = el.dataset.roleNav !== role; });
-  const sel = $('#role-switch'); if (sel) sel.value = role;
-  const d = $('#role-desc'); if (d) d.textContent = roleInfo(role).desc;
+  const info = roleInfo(role);
+  const nav = $('#sidenav');
+  if (nav && nav.dataset.role !== role) {
+    const items = roleNavItems(role);
+    nav.innerHTML = `<div class="sb-space"><small>当前产品空间</small><b>${info.space}</b><span>${info.desc}</span></div>${items.groups.map((group) => `<div class="sb-group">${group.label}</div>${group.items.map((x) => navItem930(...x)).join('')}`).join('')}<div class="sb-group">账户</div>${navItem930(...items.settings)}`;
+    nav.dataset.role = role;
+  }
+  document.body.dataset.role = role;
+  const values = {
+    '#sb-space-name': `${info.space} · 930`, '#uc-avatar': info.avatar, '#uc-name': info.name,
+    '#uc-space': info.space, '#uc-pop-avatar': info.avatar, '#uc-pop-name': info.name,
+    '#uc-pop-space': `${info.space} · SSO 已登录`,
+  };
+  Object.entries(values).forEach(([selector, value]) => { const el = $(selector); if (el) el.textContent = value; });
+  $$('[data-demo-role]').forEach((el) => el.classList.toggle('current', el.dataset.demoRole === role));
 }
 function initRoleSwitcher() {
-  const sel = $('#role-switch'); if (!sel) return;
-  applyRoleNavigation();
-  sel.addEventListener('change', () => {
-    localStorage.setItem('aisr-role-930', sel.value);
-    applyRoleNavigation();
-    location.hash = roleHome(sel.value);
-  });
+  $$('[data-demo-role]').forEach((button) => button.addEventListener('click', () => {
+    setRole930(button.dataset.demoRole);
+    closeUserPop();
+  }));
 }
 function setRole930(role) {
   localStorage.setItem('aisr-role-930', role);
+  const nav = $('#sidenav'); if (nav) delete nav.dataset.role;
   applyRoleNavigation();
   location.hash = roleHome(role);
 }
-function renderRoleWorkspace() {
-  applyRoleNavigation();
-  const role = currentRole(); const info = roleInfo(role);
-  const roles = ['training','regulatory','enterprise'];
-  const roleDetails = {
-    training: ['授权数据版本', '私有消费空间', '效果回传', '隐私事件为 0'],
-    regulatory: ['冻结测试条件', '批量执行', '证据复核', '审计报告'],
-    enterprise: ['任务配方', 'Agent / 环境接入', '批量 Roll', '数据交付'],
-  };
-  const metric = role === 'training'
-    ? [['可消费数据版本','12'],['P2 敏感数据集','4'],['本周消费记录','7'],['待回填效果','2']]
-    : role === 'regulatory'
-      ? [['进行中批次','3'],['待测对象','8'],['待复核证据','2'],['冻结任务集','6']]
-      : [['运行中批次','4'],['今日有效轨迹','18,420'],['质量通过率','96.8%'],['预计成本','¥ 2,840']];
-  $('#view').innerHTML = `<div class="page">
-    <div class="role-hero">
-      <div class="role-hero-main"><div class="role-kicker">930 ROLE WORKSPACE</div><h2>${info.label}</h2><p>${info.desc}</p><button class="btn btn-primary" id="role-main-action">${info.action}</button></div>
-      <div class="role-hero-side"><div class="card-title">统一北极星</div><div class="stat-num" style="font-size:28px;margin:12px 0">有效轨迹数据</div><p class="small muted" style="line-height:1.8">经授权、通过质量门禁、被训练或评测实际消费，并完成结果或效果回传。</p><span class="badge badge-olive">隐私与证据双门禁</span></div>
-    </div>
-    <div class="metric-strip">${metric.map((m) => `<div class="metric-tile"><small>${m[0]}</small><b>${m[1]}</b></div>`).join('')}</div>
-    <div class="history-head">三类用户视角<span class="head-badge">共享底座 · 独立任务与权限</span></div>
-    <div class="role-grid">${roles.map((r) => { const x=roleInfo(r); return `<div class="role-card${r===role?' active':''}"><span class="badge ${r==='training'?'badge-primary':r==='regulatory'?'badge-example':'badge-gold'}">${x.short}</span><h3 style="margin-top:12px">${x.label}</h3><p>${x.desc}</p><div class="small muted" style="line-height:1.8">${roleDetails[r].map((v)=>`✓ ${v}`).join('<br>')}</div><button class="btn ${r===role?'btn-primary':'btn-outline'} btn-sm" style="margin-top:14px" data-role-choice="${r}">${r===role?'进入当前空间':'切换并进入'}</button></div>`; }).join('')}</div>
-    <div class="history-head">930 共享闭环<span class="head-badge">现有模板自动编排，不生成未知攻击能力</span></div>
-    <div class="ai-loop">${[['需求理解','目标与约束'],['任务编排','环境 / Agent / 工具'],['自主执行','运行与恢复'],['证据验证','规则与重放'],['数据精炼','结构化与脱敏'],['消费回传','效果与知识']].map((x,i)=>`<div class="ai-step ${i<2?'done':i===2?'active':''}"><b>${i+1} ${x[0]}</b><small>${x[1]}</small></div>`).join('')}</div>
-    <div class="policy-note"><b>自动化边界：</b>正常任务可按预设策略无人值守；新外部网络、高风险工具、环境逃逸、敏感泄露、证据冲突和跨用途数据流转必须停止或进入人工复核。</div>
-  </div>`;
-  $('#role-main-action').addEventListener('click', () => { location.hash = roleHome(role); });
-  $$('[data-role-choice]').forEach((b) => b.addEventListener('click', () => setRole930(b.dataset.roleChoice)));
-}
-function trainingDatasets930() {
+const enterpriseDatasetState930 = { category:'全部' };
+function enterpriseDatasets930() {
   return [
-    { id:'DS-TRJ-0930-01', name:'企业内网横向移动有效轨迹集', source:'ENT-0520 靶场', count:'41,280 条', quality:'96.8', privacy:'P1', purpose:'Agent 后训练 / 策略优化', license:'实验室内部研究', version:'v1.3', bias:'对 Windows 域环境覆盖较多' },
-    { id:'DS-TRJ-0930-02', name:'漏洞利用失败与边界样本集', source:'ExploitGym + 人工复核', count:'18,640 条', quality:'94.2', privacy:'P1', purpose:'失败恢复 / 工具选择', license:'实验室内部研究', version:'v2.1', bias:'Web 与中间件场景为主' },
-    { id:'DS-RSK-0930-03', name:'高风险工具调用约束数据集', source:'监管评测回流', count:'8,420 条', quality:'98.1', privacy:'P2', purpose:'安全对齐 / 拒绝策略', license:'仅限批准项目', version:'v1.0', bias:'不得导出原始证据' },
-    { id:'DS-ENT-0930-04', name:'企业 Agent 任务失败摘要集', source:'企业项目脱敏回流', count:'6,180 条', quality:'91.7', privacy:'P2', purpose:'错误诊断 / 场景生成', license:'受控计算', version:'v0.9', bias:'仅含去标识化摘要' },
+    { id:'DS-ATK-0930-01', name:'企业内网横向移动攻击轨迹', category:'攻击轨迹', source:'TASK-0930-018 / ENT-0520', size:'41,280 条', quality:'96.8', privacy:'P2', purpose:'企业 Agent 训练 / 项目复测', format:'trace.v2 JSONL', rule:'步骤完整 + 结果可验证', status:'正式', version:'v1.3', lineage:'RUN-0930-018', bias:'Windows 域环境覆盖较多' },
+    { id:'DS-DEF-0930-02', name:'告警研判与防御处置轨迹', category:'防御响应', source:'蓝队 Agent 联合演练', size:'16,240 条', quality:'95.1', privacy:'P1', purpose:'检测与响应策略优化', format:'response.v1 JSONL', rule:'告警与处置结果关联', status:'正式', version:'v1.1', lineage:'RUN-0930-014', bias:'以主机与网络告警为主' },
+    { id:'DS-VUL-0930-03', name:'Web 漏洞利用成败样本', category:'漏洞样本', source:'TASK-0930-016 / WEB-0328', size:'18,640 条', quality:'94.2', privacy:'P1', purpose:'漏洞分析 / 利用恢复训练', format:'vuln-case.v2 JSONL', rule:'漏洞环境和结果已复核', status:'正式', version:'v2.1', lineage:'RUN-0930-016', bias:'Web 与中间件漏洞占比较高' },
+    { id:'DS-TOOL-0930-04', name:'安全工具调用与参数记录', category:'工具调用', source:'企业授权攻防任务', size:'12,860 条', quality:'97.4', privacy:'P1', purpose:'工具选择与参数生成', format:'tool-call.v2 JSONL', rule:'调用结果与权限范围已验证', status:'正式', version:'v2.1', lineage:'RUN-0930-017', bias:'渗透与漏洞验证工具占比较高' },
+    { id:'DS-BOUND-0930-05', name:'越权与环境逃逸阻断样本', category:'安全边界', source:'运行安全门禁', size:'1,680 条', quality:'99.0', privacy:'P2', purpose:'越权检测 / 安全约束训练', format:'security-event.v1 JSONL', rule:'人工确认后方可使用', status:'隔离', version:'v0.6', lineage:'RUN-GATE-008', bias:'仅用于受控安全研究' },
+    { id:'DS-EVAL-0930-06', name:'高风险工具与拒答评测样本', category:'评测样本', source:'监管评测任务回流', size:'8,420 条', quality:'98.1', privacy:'P2', purpose:'模型评测 / 安全对齐', format:'evaluation.v1 JSONL', rule:'题集与评分规则冻结', status:'正式', version:'v1.0', lineage:'REG-0930-006', bias:'原始监管证据禁止导出' },
+    { id:'DS-OBS-0930-07', name:'拓扑流量终端联合观测集', category:'多模态观测', source:'靶场观测系统', size:'3,120 组', quality:'92.6', privacy:'P2', purpose:'态势理解 / 报告生成', format:'observation.v1 Bundle', rule:'时间戳与 Run 已对齐', status:'审阅中', version:'v0.8', lineage:'RUN-0930-018', bias:'只包含隔离靶场观测' },
+    { id:'DS-REVIEW-0930-08', name:'攻击路径与修复建议专家复核集', category:'专家标注', source:'安全工程师复核', size:'4,200 组', quality:'98.2', privacy:'P2', purpose:'策略优化 / 修复建议训练', format:'review.v1 JSONL', rule:'双人复核一致性 ≥ 95%', status:'正式', version:'v2.0', lineage:'REVIEW-0930-019', bias:'标注偏好来自实验室专家' },
   ];
 }
-function getConsumption930() { try { return JSON.parse(localStorage.getItem('aisr-consumption-930') || '[]'); } catch (_) { return []; } }
-function saveConsumption930(xs) { localStorage.setItem('aisr-consumption-930', JSON.stringify(xs)); }
 function openDatasetCard930(ds) {
-  openModal(`<h2>数据卡 · ${esc(ds.name)}</h2><p class="page-desc mono">${ds.id} · ${ds.version}</p>
-    <div class="form-grid"><div class="form-group"><label>来源</label><div class="review-val">${esc(ds.source)}</div></div><div class="form-group"><label>规模</label><div class="review-val">${ds.count}</div></div><div class="form-group"><label>质量评分</label><div class="review-val">${ds.quality} / 100</div></div><div class="form-group"><label>隐私级别</label><div class="review-val">${ds.privacy}</div></div><div class="form-group"><label>允许用途</label><div class="review-val">${esc(ds.purpose)}</div></div><div class="form-group"><label>许可证</label><div class="review-val">${esc(ds.license)}</div></div></div>
-    <div class="policy-note" style="margin-top:14px"><b>已知偏差：</b>${esc(ds.bias)}。数据只记录可观察输入、动作、工具调用、环境反馈、结果与证据，不包含模型隐藏思维链。</div>`, 'wide');
-}
-function openConsume930(ds) {
-  openModal(`<h2>创建受控消费记录</h2><p class="page-desc">${esc(ds.name)} · ${ds.id} · ${ds.privacy}</p>
-    <div class="form-grid"><div class="form-group"><label>目标模型 / Agent</label><select id="consume-model"><option>Mythos-Attack-v2.3</option><option>Sentinel-7B-v1.8</option><option>Research-Agent-0930</option></select></div><div class="form-group"><label>消费用途</label><select id="consume-purpose"><option>后训练</option><option>策略优化</option><option>固定基准复测</option></select></div><div class="form-group"><label>消费方式</label><select id="consume-mode"><option>私有空间受控挂载</option><option>受控查询</option></select></div><div class="form-group"><label>固定基准</label><select id="consume-bench"><option>ExploitGym 固定集 v3</option><option>CyberGym 固定集 v2</option></select></div></div>
-    <label class="check-row" style="margin:16px 0"><input type="checkbox" id="consume-ack"> <span>我确认仅按数据卡允许用途使用，不导出未授权原始数据。</span></label>
-    <div class="modal-actions"><button class="btn btn-outline" data-x2>取消</button><button class="btn btn-primary" id="consume-confirm">确认并创建消费记录</button></div>`, 'wide');
-  $('[data-x2]').addEventListener('click', closeModal);
-  $('#consume-confirm').addEventListener('click', () => {
-    if (!$('#consume-ack').checked) { showToast('请先确认数据使用条件'); return; }
-    const xs=getConsumption930(); xs.unshift({ id:'CON-'+Date.now().toString().slice(-8), dataset:ds.name, version:ds.version, model:$('#consume-model').value, purpose:$('#consume-purpose').value, mode:$('#consume-mode').value, benchmark:$('#consume-bench').value, status:'待回填效果', time:'刚刚' }); saveConsumption930(xs); closeModal(); showToast('已创建受控消费记录'); renderTrainingData930();
-  });
-}
-function renderTrainingData930() {
-  applyRoleNavigation();
-  const ds=trainingDatasets930(); const rec=getConsumption930();
-  $('#view').innerHTML=`<div class="page">${backLink('#/workspace','角色总览')}<div class="page-head-row"><div><h2 class="page-title">训练数据消费 ${helpTip('研究员消费已授权数据版本。平台记录用途、模型版本、固定基准和效果回传，不建设通用训练调度。')}</h2><p class="page-desc">数据发现 · 隐私授权 · 私有消费 · 效果回传</p></div><a class="btn btn-outline" href="#/training">查看历史训练调度能力</a></div>
-    <div class="metric-strip"><div class="metric-tile"><small>可消费版本</small><b>${ds.length}</b></div><div class="metric-tile"><small>P2 敏感数据</small><b>${ds.filter(x=>x.privacy==='P2').length}</b></div><div class="metric-tile"><small>消费记录</small><b>${rec.length+7}</b></div><div class="metric-tile"><small>隐私违规</small><b style="color:var(--chart-3)">0</b></div></div>
-    <div class="history-head">授权数据集<span class="head-badge">不默认下载原始数据</span></div><div class="dataset-grid">${ds.map(x=>`<div class="dataset-card"><div class="dataset-card-head"><div><div class="mono small muted">${x.id} · ${x.version}</div><h3>${x.name}</h3><div class="small muted">${x.source}</div></div><span class="badge privacy-${x.privacy.toLowerCase()}">${x.privacy}</span></div><div class="dataset-meta"><span class="badge">${x.count}</span><span class="badge badge-olive">质量 ${x.quality}</span><span class="badge">${x.license}</span></div><div class="small">允许用途：${x.purpose}</div><div class="dataset-foot"><button class="btn btn-ghost btn-sm" data-ds-card="${x.id}">查看数据卡</button><button class="btn btn-primary btn-sm" data-ds-consume="${x.id}">创建消费记录</button></div></div>`).join('')}</div>
-    <div class="history-head" style="margin-top:28px">最近消费与效果<span class="head-badge">未回填效果不计入有效消费</span></div><table class="report-table"><thead><tr><th>记录</th><th>数据版本</th><th>模型 / Agent</th><th>用途</th><th>消费方式</th><th>状态</th></tr></thead><tbody>${rec.length?rec.map(x=>`<tr><td class="mono small">${x.id}</td><td>${esc(x.dataset)} · ${x.version}</td><td>${esc(x.model)}</td><td>${x.purpose}</td><td>${x.mode}</td><td><span class="badge badge-gold">${x.status}</span></td></tr>`).join(''):'<tr><td colspan="6" class="small muted" style="padding:18px;text-align:center">尚无本地新增记录；可从上方数据集创建一条受控消费记录</td></tr>'}</tbody></table>
-    <div class="policy-note" style="margin-top:18px"><b>隐私规则：</b>P2 数据只允许在项目私有空间受控使用；跨项目、导出或改变用途时必须重新授权。平台不采集模型隐藏思维链。</div></div>`;
-  $$('[data-ds-card]').forEach(b=>b.addEventListener('click',()=>openDatasetCard930(ds.find(x=>x.id===b.dataset.dsCard))));
-  $$('[data-ds-consume]').forEach(b=>b.addEventListener('click',()=>openConsume930(ds.find(x=>x.id===b.dataset.dsConsume))));
+  openModal(`<h2>数据卡 · ${esc(ds.name)}</h2><p class="page-desc mono">${ds.id} · ${ds.version} · ${ds.category}</p>
+    <div class="form-grid"><div class="form-group"><label>数据来源</label><div class="review-val">${esc(ds.source)}</div></div><div class="form-group"><label>来源运行</label><div class="review-val mono">${ds.lineage}</div></div><div class="form-group"><label>数据规模</label><div class="review-val">${ds.size}</div></div><div class="form-group"><label>质量评分</label><div class="review-val">${ds.quality} / 100</div></div><div class="form-group"><label>敏感级别</label><div class="review-val">${ds.privacy}</div></div><div class="form-group"><label>允许用途</label><div class="review-val">${esc(ds.purpose)}</div></div><div class="form-group"><label>存储格式</label><div class="review-val mono">${esc(ds.format)}</div></div><div class="form-group"><label>质量规则</label><div class="review-val">${esc(ds.rule)}</div></div></div>
+    <div class="policy-note" style="margin-top:14px"><b>已知偏差：</b>${esc(ds.bias)}。来源、用途、敏感级别和质量规则随数据版本冻结。</div>`, 'wide');
 }
 function getBatches930() { try { return JSON.parse(localStorage.getItem('aisr-production-930') || '[]'); } catch (_) { return []; } }
-function saveBatches930(xs) { localStorage.setItem('aisr-production-930',JSON.stringify(xs)); }
+function saveBatches930(xs) { localStorage.setItem('aisr-production-930', JSON.stringify(xs)); }
 function openProductionWizard930() {
-  openModal(`<h2>创建 AI 数据生产批次</h2><p class="page-desc">使用已批准的靶场任务和 Agent，在隔离环境内自动 Roll、验证和精炼轨迹。</p><div class="form-grid"><div class="form-group"><label>数据目标</label><select id="prod-goal"><option>横向移动成功与失败轨迹</option><option>高风险工具调用边界样本</option><option>漏洞利用恢复轨迹</option></select></div><div class="form-group"><label>任务配方</label><select id="prod-scene"><option>ENT-0520 企业内网靶场</option><option>ENG-0416 能源靶场</option></select></div><div class="form-group"><label>执行 Agent</label><select id="prod-agent"><option>Mythos-Attack-v2</option><option>Claude-Opus-4.7 外部接入</option><option>GPT-5.4 外部接入</option></select></div><div class="form-group"><label>Roll 数量</label><input id="prod-rolls" type="number" min="1" max="500" value="50"></div><div class="form-group"><label>并发</label><select id="prod-concurrency"><option>1</option><option>2</option><option>4</option></select></div><div class="form-group"><label>数据级别</label><select id="prod-privacy"><option>P1 实验室内部</option><option>P2 项目敏感</option></select></div></div><label class="check-row"><input id="prod-auto" type="checkbox" checked> <span>自动重放、证据校验、去重、敏感扫描和质量评分</span></label><div class="policy-note" style="margin-top:14px">仅在平台隔离靶场运行。检测到越权、环境逃逸、敏感泄露或异常预算时立即阻断并升级人工。</div><div class="modal-actions"><button class="btn btn-outline" data-x2>取消</button><button class="btn btn-primary" id="prod-confirm">生成计划并启动</button></div>`, 'wide');
+  openModal(`<h2>创建数据生产任务</h2><p class="page-desc">定义目标数据集，并选择网络安全场景、Agent、环境和运行约束。</p><div class="form-grid"><div class="form-group"><label>目标数据集</label><select id="prod-goal"><option>企业内网攻击轨迹</option><option>高风险工具调用边界样本</option><option>漏洞利用失败恢复样本</option></select></div><div class="form-group"><label>场景模板</label><select id="prod-scene"><option>ENT-0520 企业内网靶场</option><option>ENG-0416 能源靶场</option></select></div><div class="form-group"><label>执行 Agent</label><select id="prod-agent"><option>Mythos-Agent v2.3</option><option>Claude-Opus-4.7 外部接入</option><option>GPT-5.4 外部接入</option></select></div><div class="form-group"><label>Roll 数量</label><input id="prod-rolls" type="number" min="1" max="500" value="50"></div><div class="form-group"><label>并发</label><select id="prod-concurrency"><option>1</option><option>2</option><option>4</option></select></div><div class="form-group"><label>敏感级别</label><select id="prod-privacy"><option>P1 实验室内部</option><option>P2 项目敏感</option></select></div></div><label class="check-row"><input id="prod-auto" type="checkbox" checked> <span>启用结果验证、重放、去重、敏感扫描和质量评分</span></label><div class="policy-note" style="margin-top:14px">检测到越权、环境逃逸、敏感泄露或预算异常时，运行立即阻断并进入人工复核。</div><div class="modal-actions"><button class="btn btn-outline" data-x2>取消</button><button class="btn btn-primary" id="prod-confirm">创建任务并启动首次运行</button></div>`, 'wide');
   $('[data-x2]').addEventListener('click',closeModal);
-  $('#prod-confirm').addEventListener('click',()=>{ const rolls=Math.max(1,Math.min(500,Number($('#prod-rolls').value)||1)); const xs=getBatches930(); xs.unshift({id:'ROLL-'+Date.now().toString().slice(-8),goal:$('#prod-goal').value,scene:$('#prod-scene').value,agent:$('#prod-agent').value,rolls,done:0,privacy:$('#prod-privacy').value.slice(0,2),status:'运行中',quality:'—'}); saveBatches930(xs); closeModal(); showToast('AI 已生成执行计划并启动数据生产批次'); renderProduction930(); });
+  $('#prod-confirm').addEventListener('click',()=>{const rolls=Math.max(1,Math.min(500,Number($('#prod-rolls').value)||1));const xs=getBatches930();xs.unshift({id:'TASK-'+Date.now().toString().slice(-8),goal:$('#prod-goal').value,scene:$('#prod-scene').value,agent:$('#prod-agent').value,rolls,done:0,privacy:$('#prod-privacy').value.slice(0,2),status:'运行中',quality:'—'});saveBatches930(xs);closeModal();showToast('数据生产任务已创建，首次运行已启动');renderProduction930();});
 }
+const ANNOTATION_ITEMS_930 = [
+  {id:'ANN-0930-027',trace:'TRACE-18426',run:'RUN-0930-018',type:'ATT&CK 技术标注',title:'横向移动阶段技术映射',ai:'T1021.002 · SMB/Windows Admin Shares',confidence:92,evidence:'smbclient 建立 ADMIN$ 会话；目标主机产生 4624 登录事件',priority:'P0',status:'待确认'},
+  {id:'ANN-0930-026',trace:'TRACE-18401',run:'RUN-0930-018',type:'敏感信息标注',title:'命令回显包含内部账号',ai:'账号标识符 · 需要掩码',confidence:98,evidence:'stdout 中出现 CORP\\svc_backup 与内部主机名',priority:'P0',status:'待脱敏'},
+  {id:'ANN-0930-025',trace:'TRACE-18342',run:'RUN-0930-018',type:'结果标签',title:'横向移动是否成功',ai:'成功 · 证据存在轻微冲突',confidence:71,evidence:'Agent 报告成功；终端日志显示会话建立后立即断开',priority:'P1',status:'待复核'},
+  {id:'ANN-0930-024',trace:'TRACE-17731',run:'RUN-0930-017',type:'工具风险标签',title:'高风险工具调用边界',ai:'越权调用 · 应隔离',confidence:95,evidence:'工具未在任务白名单，且目标超出允许网段',priority:'P0',status:'待确认'},
+  {id:'ANN-0930-023',trace:'TRACE-16682',run:'RUN-0930-016',type:'失败原因',title:'漏洞利用失败归因',ai:'版本不匹配 / 前置条件缺失',confidence:84,evidence:'目标版本 2.4.1，不满足 CVE 模板要求的 2.3.x',priority:'P2',status:'待确认'},
+];
+const annotationState930={selected:'ANN-0930-027',filter:'全部'};
+const LONG_TRACE_CASES_930 = [
+  { id:'TRACE-18426', title:'企业内网横向移动与域控接管', scene:'ENT-0520', agent:'Mythos-Agent v2.3', steps:82, targetSteps:120, calls:214, result:'生产中', quality:'96.8', dataset:'企业内网攻击轨迹 v1.4', phases:[['任务理解',6,'plan'],['资产侦察',14,'scan'],['漏洞验证',11,'exploit'],['权限获取',13,'access'],['横向移动',19,'lateral'],['目标验证',9,'verify'],['数据处理',10,'data']] },
+  { id:'TRACE-17731', title:'高风险工具调用与安全边界验证', scene:'ENG-0416', agent:'Sentinel-7B v1.8', steps:76, targetSteps:110, calls:168, result:'生产中', quality:'98.1', dataset:'工具调用边界样本 v1.1', phases:[['任务理解',5,'plan'],['环境识别',12,'scan'],['工具选择',15,'tool'],['边界试探',18,'risk'],['策略阻断',9,'defense'],['证据核验',10,'verify'],['人工复核',7,'data']] },
+  { id:'TRACE-16682', title:'Web 漏洞利用失败与自主恢复', scene:'WEB-0328', agent:'Mythos-Agent v2.2', steps:91, targetSteps:140, calls:247, result:'生产中', quality:'94.2', dataset:'漏洞利用成败样本 v2.1', phases:[['任务理解',7,'plan'],['指纹识别',16,'scan'],['漏洞验证',18,'exploit'],['首次失败',8,'risk'],['原因诊断',13,'defense'],['策略恢复',17,'access'],['结果复测',12,'verify']] },
+  { id:'TRACE-15920', title:'能源协议识别与攻击防御联动', scene:'ICS-0704', agent:'Claude-Opus-4.7', steps:74, targetSteps:105, calls:193, result:'生产中', quality:'90.6', dataset:'能源场景攻防轨迹 v0.8', phases:[['任务理解',5,'plan'],['协议识别',14,'scan'],['拓扑探索',12,'tool'],['攻击模拟',15,'exploit'],['防御响应',11,'defense'],['影响验证',9,'verify'],['专家复核',8,'data']] },
+];
+const longTraceState930 = { selected:'TRACE-18426' };
+function enterpriseLineageSvg930(){
+  const nodes=[
+    ['p1',25,45,'生产任务','TASK-0930-018','source'],['p2',25,125,'监管评测','REG-0930-006','test'],['p3',25,205,'专家复核','REVIEW-0930-019','source'],
+    ['d1',205,45,'攻击轨迹 v1.4','41,280 条 · P2','data'],['d2',205,125,'安全评测样本 v1.0','8,420 条 · P2','data'],['d3',205,205,'专家偏好数据 v2.0','4,200 组 · P2','data'],
+    ['t1',425,45,'RL 训练任务','TRN-2026-0413 · 输入 55%','train'],['t2',425,125,'CPT 增量训练','TRN-2026-0412 · 安全语料','train'],['t3',425,205,'DPO 偏好训练','TRN-2026-0414 · 4,200 对','train'],
+    ['m1',645,65,'Mythos-Agent v2.2','私有轨迹 RL','model'],['m2',645,175,'Mythos-Agent v2.3','混合数据训练','model'],
+    ['e1',850,45,'能力测试任务','JOB-2026-021 · ExploitGym','test'],['e2',850,125,'安全测试任务','REG-2026-022 · 红线全集','test'],['e3',850,205,'项目复测任务','JOB-2026-023 · ENT-0520','test'],
+    ['r1',1055,45,'能力结果','成功率 71.4%','result'],['r2',1055,125,'安全结果','门禁通过 95.2%','result'],['r3',1055,205,'失败样本回流','DS-VUL v2.2','feedback']
+  ];
+  const edges=[
+    ['p1','d1','生产'],['p2','d2','评测回流'],['p3','d3','专家确认'],
+    ['d1','t1','训练输入'],['d2','t2','安全语料'],['d3','t3','偏好输入'],['d1','t3','成功/失败对'],
+    ['t1','m1','产出'],['t2','m2','合并'],['t3','m2','对齐'],['m1','e1','候选版本'],['m2','e1','候选版本'],['m2','e2','冻结测试'],['m2','e3','项目复测'],
+    ['e1','r1','指标'],['e2','r2','指标'],['e3','r3','失败回流'],['r3','d1','下一版本',true]
+  ];
+  const byId=Object.fromEntries(nodes.map((n)=>[n[0],n]));
+  return `<svg class="lineage-svg lineage-task-flow" viewBox="0 0 1210 270" role="img" aria-label="生产数据服务训练任务并经过测试任务验证的数据血缘图"><defs><marker id="arrow930" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>${edges.map(([a,b,label,loop])=>{const x=byId[a],y=byId[b];const x1=x[1]+125,y1=x[2],x2=y[1],y2=y[2];const path=loop?`M${x1} ${y1} C${x1+35} 255,170 255,${y[1]} ${y2+22}`:`M${x1} ${y1} C${x1+38} ${y1},${x2-38} ${y2},${x2} ${y2}`;const lx=loop?620:(x1+x2)/2,ly=loop?252:(y1+y2)/2-5;return `<path class="${loop?'feedback-edge':''}" d="${path}"/><text class="edge-label" x="${lx}" y="${ly}">${label}</text>`;}).join('')}${nodes.map(([id,x,y,t,d,c])=>`<g class="lineage-node-svg ${c}" data-lineage-node="${id}" transform="translate(${x},${y-25})"><rect width="125" height="50" rx="2"/><text x="10" y="19">${t}</text><text class="sub" x="10" y="37">${d}</text></g>`).join('')}</svg>`;
+}
+function traceCaseHtml930(trace){
+  return `<article class="trace-case${trace.id===longTraceState930.selected?' active':''}" data-trace-case="${trace.id}"><div class="trace-case-head"><div><small class="mono">${trace.id} · ${trace.scene}</small><h3>${trace.title}</h3><p>${trace.agent} · 输出 ${trace.dataset}</p></div><div class="trace-case-stats"><b>${trace.steps} / ${trace.targetSteps} steps</b><span>${trace.calls} 次工具 / 模型调用</span><em><i class="live-dot"></i>${trace.result} · 实时质量 ${trace.quality}</em></div></div><div class="trace-phase-bar">${trace.phases.map(([name,count,type])=>`<div class="trace-phase ${type}" style="flex:${count}" title="${name} ${count} steps"><span>${count}</span></div>`).join('')}</div><div class="trace-phase-labels">${trace.phases.map(([name,count])=>`<span style="flex:${count}">${name}<b>${count}</b></span>`).join('')}</div></article>`;
+}
+function renderEnterpriseOverview930(){
+  applyRoleNavigation();
+  const selected=LONG_TRACE_CASES_930.find((x)=>x.id===longTraceState930.selected)||LONG_TRACE_CASES_930[0];
+  const chain=[['01','需求与数据目标','定义数据用途、字段和质量阈值'],['02','场景任务编排','冻结靶场、Agent、工具和权限'],['03','自主攻防运行','形成 70+ steps 长链路轨迹'],['04','AI 预标注','识别 ATT&CK、结果、风险与敏感字段'],['05','人工标注复核','处理异常、低置信和高价值样本'],['06','训练任务消费','数据版本进入 RL、CPT、DPO 任务'],['07','测试任务回流','固定基准验证增益并回流失败样本']];
+  $('#view').innerHTML=`<div class="page enterprise-console landing-overview"><div class="landing-hero"><div><div class="space-eyebrow">企业空间 / 总览</div><h2>模拟攻防驱动企业测训一体闭环</h2><p>通过测试场的模拟靶场任务与自动化攻防任务，持续生产可训练、可评测的安全数据，构建企业测训一体的安全闭环。</p></div><div class="landing-actions"><a class="btn btn-primary" href="#/developer/pipelines">新建生产任务</a><a class="btn btn-outline" href="#/developer/annotation">处理标注待办</a></div></div>
+    <div class="history-head">数据飞轮<span class="head-badge">2026-09-08 · 当前周期</span></div><div class="landing-chain">${chain.map(([n,t,d],i)=>`<div class="landing-chain-step ${i<4?'done':i===4?'active':''}"><span>${n}</span><b>${t}</b><small>${d}</small></div>`).join('')}</div>
+    <div class="overview-metrics"><div><small>70+ steps 轨迹</small><b>268</b><span>近 24h +18</span><div class="mini-bars">${[12,18,10,24,21,30,27,36,31,42].map((h)=>`<i style="height:${h}%"></i>`).join('')}</div></div><div><small>训练任务引用</small><b>7</b><span>RL 3 · CPT 2 · DPO 2</span><div class="mini-bars">${[20,22,28,31,26,39,42,45,51,58].map((h)=>`<i style="height:${h}%"></i>`).join('')}</div></div><div><small>测试任务回流</small><b>12</b><span>能力 7 · 安全 5</span><div class="mini-bars">${[14,19,24,28,33,38,44,49,55,62].map((h)=>`<i style="height:${h}%"></i>`).join('')}</div></div><div><small>人工标注待办</small><b>27</b><span>P0 4 · P1 11</span><div class="mini-bars alert">${[48,43,38,35,29,32,25,22,18,15].map((h)=>`<i style="height:${h}%"></i>`).join('')}</div></div></div>
+    <section class="overview-panel lineage-flow-panel"><div class="history-head head-row"><span>训练与测试任务数据血缘<span class="head-badge">生产 / 评测数据 → 训练任务 → 模型版本 → 测试任务 → 失败样本回流</span></span><a href="#/research/training" class="btn btn-ghost btn-sm">查看训练任务</a></div><div class="lineage-scroll">${enterpriseLineageSvg930()}</div><div class="lineage-service-cards"><div><b>TRN-2026-0413 · RL</b><span>攻击轨迹 v1.4 提供 41,280 条可重放轨迹，占训练输入 55%</span></div><div><b>TRN-2026-0412 · CPT</b><span>监管安全评测样本补充高风险工具和拒答边界语料</span></div><div><b>TRN-2026-0414 · DPO</b><span>专家复核数据构造 4,200 对成功路径与弱证据路径偏好</span></div><div><b>测试结果回流</b><span>ExploitGym、红线全集与项目复测的失败样本进入下一数据版本</span></div></div></section>
+    <section class="overview-panel trace-gallery"><div class="history-head head-row"><span>长链路轨迹生产管线<span class="head-badge">正在生产 · 动作 / 工具 / 观测 / 验证实时聚合</span></span><span class="mono small">当前：${selected.id} · ${selected.steps} / ${selected.targetSteps} steps</span></div><div class="trace-case-list">${LONG_TRACE_CASES_930.map(traceCaseHtml930).join('')}</div><div class="selected-trace-summary"><div><small>当前生产管线</small><b>${selected.title}</b><span>${selected.scene} · ${selected.agent}</span></div><div><small>链路规模</small><b>${selected.steps} / ${selected.targetSteps} steps · ${selected.calls} calls</b><span>${selected.phases.length} 个阶段</span></div><div><small>输出数据</small><b>${selected.dataset}</b><span><i class="live-dot"></i>${selected.result} · 实时质量 ${selected.quality}</span></div></div></section>
+    <div class="history-head">本周期关键变化<span class="head-badge">数据服务训练的可验证结果</span></div><div class="cycle-gains"><div><small>企业内网能力</small><b>51.3% → 71.4%</b><span>攻击轨迹进入 RL 训练后 +20.1 pt</span></div><div><small>安全边界通过率</small><b>82.1% → 95.2%</b><span>监管测试样本进入 CPT / DPO 后 +13.1 pt</span></div><div><small>标注处理效率</small><b>3.2h → 38min</b><span>AI 预标注减少人工逐条处理</span></div></div></div>`;
+  $$('[data-lineage-node]').forEach((node)=>node.addEventListener('click',()=>showToast(`已定位血缘节点 ${node.dataset.lineageNode}（演示）`)));
+  $$('[data-trace-case]').forEach((node)=>node.addEventListener('click',()=>{longTraceState930.selected=node.dataset.traceCase;renderEnterpriseOverview930();}));
+}
+
+function renderEnterpriseAnnotationWorkbench930(){
+  applyRoleNavigation();
+  const items=annotationState930.filter==='全部'?ANNOTATION_ITEMS_930:ANNOTATION_ITEMS_930.filter((x)=>x.type===annotationState930.filter);
+  const selected=ANNOTATION_ITEMS_930.find((x)=>x.id===annotationState930.selected)||ANNOTATION_ITEMS_930[0];
+  const types=['全部',...new Set(ANNOTATION_ITEMS_930.map((x)=>x.type))];
+  $('#view').innerHTML=`<div class="page enterprise-console annotation-workbench"><div class="space-eyebrow">企业空间 / 人工标注</div><div class="page-head-row"><div><h2 class="page-title">标注工作台</h2><p class="page-desc">集中处理所有需要人工判断的结果标签、ATT&CK 映射、失败原因、风险边界和敏感信息；AI 提供建议，不替代责任签名</p></div><button class="btn btn-primary" id="ann-next">领取下一条</button></div>
+    <div class="metric-strip"><div class="metric-tile"><small>待人工标注</small><b>27</b></div><div class="metric-tile"><small>AI 已预标注</small><b>4,820</b></div><div class="metric-tile"><small>证据冲突</small><b>6</b></div><div class="metric-tile"><small>今日完成</small><b>43</b></div></div>
+    <div class="annotation-toolbar"><div>${types.map((x)=>`<button class="chip-mini${annotationState930.filter===x?' selected':''}" data-ann-filter="${x}">${x}</button>`).join('')}</div><span>仅低置信、冲突、高风险和抽检样本进入人工队列</span></div>
+    <div class="annotation-shell"><aside class="annotation-queue"><div class="history-head">标注队列<span class="head-badge">价值 × 风险排序</span></div>${items.map((x)=>`<button class="annotation-item${x.id===selected.id?' active':''}" data-ann-item="${x.id}"><span><b>${x.id}</b><em class="${x.priority.toLowerCase()}">${x.priority}</em></span><strong>${x.title}</strong><small>${x.type} · ${x.run} · AI ${x.confidence}%</small></button>`).join('')}</aside>
+      <main class="annotation-detail"><div class="annotation-detail-head"><div><small class="mono">${selected.id} · ${selected.trace} · ${selected.run}</small><h3>${selected.title}</h3><p>${selected.type} · 状态 ${selected.status}</p></div><span class="badge ${selected.confidence>=90?'badge-olive':'badge-gold'}">AI 置信度 ${selected.confidence}%</span></div>
+        <div class="trace-context"><div class="history-head">可观察轨迹上下文<span class="head-badge">隐藏推理不入库</span></div>${[['04:08','Agent action','枚举目标共享与当前权限'],['04:12','Tool call','smbclient //10.20.3.15/ADMIN$ -U svc_backup'],['04:13','Environment','SMB 会话建立，返回 NT_STATUS_OK'],['04:14','Observation','DC01 产生事件 4624；来源主机 WS-07'],['04:16','Validator','目标范围允许；技术映射候选 T1021.002']].map(([t,k,v])=>`<div class="trace-context-row"><time>${t}</time><b>${k}</b><span>${v}</span></div>`).join('')}</div>
+        <section class="ai-assist"><div class="ai-assist-head"><div><span class="badge badge-primary">AI ASSIST</span><h3>辅助标注建议</h3></div><button class="btn btn-ghost btn-sm" id="ann-refresh">重新分析</button></div><div class="ai-suggestion"><div><small>建议标签</small><b>${selected.ai}</b></div><div><small>置信度</small><b>${selected.confidence}%</b></div><div><small>命中规则</small><b>ATT&CK v15 · 任务范围校验</b></div></div><div class="ai-evidence"><b>支持证据</b><p>${selected.evidence}</p><small>AI 建议仅基于可见动作、工具结果、环境反馈和规则；最终标签由人工确认并签名。</small></div></section>
+        <div class="annotation-form"><div><label>最终标签<select id="ann-label"><option>${selected.ai}</option><option>无法判断 · 证据不足</option><option>不适用 · 排除样本</option></select></label><label>质量等级<select id="ann-quality"><option>A · 证据完整</option><option>B · 可用但需备注</option><option>C · 进入隔离区</option></select></label></div><label>标注说明<textarea id="ann-note" placeholder="记录判定依据、冲突处理或需要补充的证据…"></textarea></label><div class="annotation-actions"><button class="btn btn-outline" id="ann-reject">退回补证据</button><button class="btn btn-outline" id="ann-isolate">标记隔离</button><button class="btn btn-primary" id="ann-approve">确认并签名</button></div></div>
+      </main><aside class="annotation-side"><h3>样本信息</h3><dl><dt>场景</dt><dd>ENT-0520</dd><dt>执行 Agent</dt><dd>Mythos-Agent v2.3</dd><dt>目标数据集</dt><dd>攻击轨迹 v1.4</dd><dt>敏感级别</dt><dd>P2</dd><dt>允许用途</dt><dd>项目内训练 / 复测</dd></dl><h3>标注规范</h3><p>只依据可观察证据。</p><p>证据冲突时不得强行通过。</p><p>敏感信息先脱敏再准入。</p><p>高风险样本需要双人复核。</p><div class="annotation-progress"><span>本批进度</span><b>43 / 70</b><div class="prog-track"><div class="prog-fill" style="width:61%"></div></div></div></aside></div></div>`;
+  $$('[data-ann-filter]').forEach((b)=>b.addEventListener('click',()=>{annotationState930.filter=b.dataset.annFilter;renderEnterpriseAnnotationWorkbench930();}));
+  $$('[data-ann-item]').forEach((b)=>b.addEventListener('click',()=>{annotationState930.selected=b.dataset.annItem;renderEnterpriseAnnotationWorkbench930();}));
+  $('#ann-next').addEventListener('click',()=>{const i=ANNOTATION_ITEMS_930.findIndex((x)=>x.id===selected.id);annotationState930.selected=ANNOTATION_ITEMS_930[(i+1)%ANNOTATION_ITEMS_930.length].id;renderEnterpriseAnnotationWorkbench930();});
+  $('#ann-refresh').addEventListener('click',()=>showToast('AI 已基于最新证据重新生成建议（演示）'));
+  $('#ann-reject').addEventListener('click',()=>showToast('已退回生产运行补充证据（演示）'));
+  $('#ann-isolate').addEventListener('click',()=>showToast('样本已进入隔离区（演示）'));
+  $('#ann-approve').addEventListener('click',()=>{showToast('标注已确认并写入责任签名（演示）');$('#ann-note').value='';});
+}
+
 function renderProduction930() {
-  applyRoleNavigation(); const local=getBatches930();
-  const batches=[...local,{id:'ROLL-0930-018',goal:'企业内网横向移动轨迹',scene:'ENT-0520',agent:'Mythos-Attack-v2',rolls:200,done:168,privacy:'P2',status:'运行中',quality:'96.8%'},{id:'ROLL-0930-017',goal:'高风险工具调用边界',scene:'ENG-0416',agent:'Sentinel-7B',rolls:120,done:120,privacy:'P1',status:'已完成',quality:'97.4%'}];
-  $('#view').innerHTML=`<div class="page">${backLink('#/workspace','角色总览')}<div class="page-head-row"><div><h2 class="page-title">数据生产工作台 ${helpTip('复用批准的任务配方，接入 Agent 或环境，自动 Roll 并生成经过验证的结构化轨迹。')}</h2><p class="page-desc">任务配方 · Agent / 环境接入 · 批量 Roll · 自动验证 · 数据交付</p></div><button class="btn btn-primary" id="prod-new">创建数据生产批次</button></div>
-    <div class="metric-strip"><div class="metric-tile"><small>今日有效轨迹</small><b>18,420</b></div><div class="metric-tile"><small>运行中批次</small><b>${batches.filter(x=>x.status==='运行中').length}</b></div><div class="metric-tile"><small>质量通过率</small><b>96.8%</b></div><div class="metric-tile"><small>越权 / 逃逸</small><b style="color:var(--chart-3)">0</b></div></div>
-    <div class="history-head">AI 原生生产链<span class="head-badge">930 使用现有模板与批准组件</span></div><div class="ai-loop">${[['需求理解','数据目标与约束'],['任务编排','场景 / Agent / 工具'],['自主 Roll','并发与停止条件'],['自动验证','规则 / 重放 / 证据'],['数据精炼','去重 / 脱敏 / 标注'],['版本交付','数据卡 / 复现包']].map((x,i)=>`<div class="ai-step ${i<3?'done':i===3?'active':''}"><b>${i+1} ${x[0]}</b><small>${x[1]}</small></div>`).join('')}</div>
-    <div class="history-head">生产批次<span class="head-badge">结构化轨迹而非原始日志</span></div><table class="report-table"><thead><tr><th>批次</th><th>数据目标</th><th>场景</th><th>Agent</th><th>Roll</th><th>隐私</th><th>质量</th><th>状态</th></tr></thead><tbody>${batches.map(x=>`<tr><td class="mono small">${x.id}</td><td>${esc(x.goal)}</td><td>${esc(x.scene)}</td><td>${esc(x.agent)}</td><td><div class="mono">${x.done} / ${x.rolls}</div><div class="prog-track" style="min-width:90px"><div class="prog-fill" style="width:${Math.round(x.done/x.rolls*100)}%"></div></div></td><td><span class="badge ${x.privacy==='P2'?'badge-gold':'badge-primary'}">${x.privacy}</span></td><td>${x.quality}</td><td><span class="badge ${x.status==='已完成'?'badge-olive':'badge-primary'}">${x.status}</span></td></tr>`).join('')}</tbody></table>
-    <div class="role-grid" style="margin-top:24px"><div class="role-card"><h3>任务配方</h3><p>复用已验证的场景目标、环境版本、Agent、工具、评分和数据字段。</p><a class="btn btn-outline btn-sm" href="#/range-hall">查看场景与任务库</a></div><div class="role-card"><h3>资源接入</h3><p>接入自有模型、Agent 或环境适配器，运行前完成接口、工具和权限校验。</p><a class="btn btn-outline btn-sm" href="#/gateway">查看资源接入</a></div><div class="role-card"><h3>数据交付</h3><p>只交付通过质量和隐私门禁的数据版本，并附数据卡、证据索引和复现包。</p><a class="btn btn-outline btn-sm" href="#/data">进入数据引擎</a></div></div></div>`;
+  applyRoleNavigation();
+  const local=getBatches930();
+  const tasks=[...local,
+    {id:'TASK-0930-018',goal:'企业内网攻防轨迹 v1.4',scene:'ENT-0520',agent:'Mythos-Agent v2.3',rolls:200,done:168,privacy:'P2',status:'运行中',quality:'96.8'},
+    {id:'TASK-0930-017',goal:'工具调用边界样本 v1.1',scene:'ENG-0416',agent:'Sentinel-7B v1.8',rolls:120,done:120,privacy:'P1',status:'待复核',quality:'98.1'},
+    {id:'TASK-0930-016',goal:'漏洞失败恢复样本 v2.1',scene:'WEB-0328',agent:'Mythos-Agent v2.2',rolls:120,done:120,privacy:'P1',status:'已完成',quality:'94.2'}];
+  $('#view').innerHTML=`<div class="page"><div class="space-eyebrow">企业空间 / 生产任务</div><div class="page-head-row"><div><h2 class="page-title">数据生产任务 ${helpTip('生产任务定义目标数据集、网络安全场景、执行 Agent、环境、运行规模和安全边界，可重复发起多次 Run。')}</h2><p class="page-desc">任务定义保持稳定，每次执行生成独立 Run 和数据版本候选</p></div><button class="btn btn-primary" id="prod-new">创建生产任务</button></div>
+    <div class="metric-strip"><div class="metric-tile"><small>生产任务</small><b>${tasks.length}</b></div><div class="metric-tile"><small>运行中</small><b>${tasks.filter((x)=>x.status==='运行中').length}</b></div><div class="metric-tile"><small>待复核</small><b>${tasks.filter((x)=>x.status==='待复核').length}</b></div><div class="metric-tile"><small>本周生成版本</small><b>4</b></div></div>
+    <div class="history-head">任务定义<span class="head-badge">数据目标与执行约束可复用</span></div><table class="report-table"><thead><tr><th>任务</th><th>目标数据集</th><th>场景模板</th><th>执行 Agent</th><th>运行规模</th><th>敏感</th><th>最近质量</th><th>最近状态</th><th></th></tr></thead><tbody>${tasks.map((x)=>`<tr><td class="mono">${x.id}</td><td>${esc(x.goal)}</td><td>${esc(x.scene)}</td><td>${esc(x.agent)}</td><td>${x.rolls} Roll</td><td><span class="badge ${x.privacy==='P2'?'badge-gold':'badge-primary'}">${x.privacy}</span></td><td>${x.quality}</td><td><span class="badge ${x.status==='已完成'?'badge-olive':x.status==='运行中'?'badge-primary':'badge-gold'}">${x.status}</span></td><td><a class="btn btn-outline btn-sm" href="#/developer/annotation">查看运行</a></td></tr>`).join('')}</tbody></table>
+    <div class="history-head">任务包含的配置<span class="head-badge">网络安全业务对象</span></div><div class="task-config-grid"><div><b>数据目标</b><span>数据分类、字段、规模、质量和允许用途</span></div><div><b>安全场景</b><span>任务模板、环境版本、目标范围和禁止项</span></div><div><b>执行资源</b><span>Agent、模型、工具权限和环境连接</span></div><div><b>运行策略</b><span>Roll、并发、预算、超时和停止条件</span></div><div><b>质量规则</b><span>结果验证、证据关联、重放、去重和异常隔离</span></div><div><b>数据安全</b><span>敏感级别、字段脱敏、项目范围和保留期</span></div></div></div>`;
   $('#prod-new').addEventListener('click',openProductionWizard930);
 }
 function renderDataEngine930() {
-  applyRoleNavigation(); const rec=getConsumption930(); const batches=getBatches930();
-  $('#view').innerHTML=`<div class="page">${backLink('#/workspace','角色总览')}<div class="page-head-row"><div><h2 class="page-title">数据引擎 ${helpTip('把任务运行结果变成有来源、有证据、有质量、有授权、可消费并可验证效果的数据版本。')}</h2><p class="page-desc">轨迹 · 证据 · 验证 · 隐私 · 数据版本 · 消费与效果</p></div><a class="btn btn-outline" href="#/legacy-data">查看 V3.9 历史数据资产</a></div>
-    <div class="metric-strip"><div class="metric-tile"><small>有效轨迹</small><b>125K</b></div><div class="metric-tile"><small>正式数据版本</small><b>12</b></div><div class="metric-tile"><small>证据完整率</small><b>97.2%</b></div><div class="metric-tile"><small>未授权流转</small><b style="color:var(--chart-3)">0</b></div></div>
-    <div class="history-head">正式数据版本<span class="head-badge">来源、质量、用途全程可追溯</span></div><table class="report-table"><thead><tr><th>版本</th><th>名称</th><th>来源 Run</th><th>轨迹</th><th>质量</th><th>隐私</th><th>允许用途</th><th>消费</th></tr></thead><tbody><tr><td class="mono">DSV-0930-012</td><td>企业内网横向移动有效轨迹</td><td>ROLL-0930-018</td><td>41,280</td><td>96.8</td><td><span class="badge badge-gold">P2</span></td><td>受控训练 / 项目复测</td><td>${rec.length+3}</td></tr><tr><td class="mono">DSV-0930-011</td><td>高风险工具调用边界样本</td><td>REG-0930-006</td><td>8,420</td><td>98.1</td><td><span class="badge badge-primary">P1</span></td><td>安全对齐 / 监管评测</td><td>5</td></tr><tr><td class="mono">DSV-0930-010</td><td>漏洞利用失败恢复轨迹</td><td>ROLL-0930-017</td><td>18,640</td><td>94.2</td><td><span class="badge badge-primary">P1</span></td><td>后训练 / 策略优化</td><td>7</td></tr></tbody></table>
-    <div class="history-head" style="margin-top:26px">质量与隐私门禁</div><div class="role-grid"><div class="role-card"><span class="badge badge-olive">QUALITY</span><h3>结构与证据</h3><p>必填字段、步骤连续性、证据关联、重放、去重和标签一致性。</p><b class="mono">97.2% 通过</b></div><div class="role-card"><span class="badge badge-gold">PRIVACY</span><h3>用途与脱敏</h3><p>所有者、允许用途、隐私级别、保留期、字段脱敏和导出策略。</p><b class="mono">0 未授权流转</b></div><div class="role-card"><span class="badge badge-example">VALUE</span><h3>消费与效果</h3><p>记录数据被哪个模型、Agent、评测或项目使用，并回填固定基准效果。</p><b class="mono">${rec.length+15} 消费记录</b></div></div>
-    <div class="policy-note"><b>数据发布规则：</b>未通过证据、质量或隐私门禁的轨迹只进入隔离区；未完成消费和效果回传的数据不计入北极星指标。${batches.length?` 当前有 ${batches.length} 个本地新建生产批次待完成验证。`:''}</div></div>`;
+  applyRoleNavigation();
+  const datasets=enterpriseDatasets930();
+  const categories=['全部',...new Set(datasets.map((x)=>x.category))];
+  const shown=enterpriseDatasetState930.category==='全部'?datasets:datasets.filter((x)=>x.category===enterpriseDatasetState930.category);
+  const formal=datasets.filter((x)=>x.status==='正式').length;
+  const categorySummary=[['攻防行为','攻击轨迹 / 防御响应','57.5K'],['漏洞与工具','漏洞样本 / 工具调用','31.5K'],['安全与评测','安全边界 / 评测样本','10.1K'],['观测与专家','多模态观测 / 专家标注','7.3K']];
+  $('#view').innerHTML=`<div class="page"><div class="space-eyebrow">企业空间 / 数据资产</div><div class="page-head-row"><div><h2 class="page-title">数据资产 ${helpTip('按网络安全业务语义管理攻击、防御、漏洞、工具、安全边界、评测和观测数据，并维护版本、质量、权限和交付状态。')}</h2><p class="page-desc">数据集、版本、来源、质量、敏感级别、允许用途和交付记录</p></div><a class="btn btn-primary" href="#/developer/pipelines">创建生产任务</a></div>
+    <div class="metric-strip"><div class="metric-tile"><small>数据集</small><b>${datasets.length}</b></div><div class="metric-tile"><small>正式版本</small><b>${formal}</b></div><div class="metric-tile"><small>有效样本</small><b>106K</b></div><div class="metric-tile"><small>待交付版本</small><b>2</b></div></div>
+    <div class="dataset-taxonomy">${categorySummary.map(([title,sub,count])=>`<div class="taxonomy-card"><small>${sub}</small><b>${title}</b><span>${count}</span></div>`).join('')}</div>
+    <div class="history-head head-row"><span>数据集清单<span class="head-badge">版本不可变 · 来源和用途可追溯</span></span><div class="dataset-filter">${categories.map((c)=>`<button class="chip-mini${enterpriseDatasetState930.category===c?' selected':''}" data-dataset-category="${c}">${c}</button>`).join('')}</div></div>
+    <table class="report-table dataset-inventory"><thead><tr><th>数据集 / 版本</th><th>分类</th><th>来源</th><th>规模</th><th>质量</th><th>敏感</th><th>允许用途</th><th>状态</th><th></th></tr></thead><tbody>${shown.map((x)=>`<tr><td><b>${x.name}</b><small class="mono">${x.id} · ${x.version}</small></td><td><span class="badge">${x.category}</span></td><td>${x.source}<small class="mono">${x.lineage}</small></td><td class="mono">${x.size}</td><td>${x.quality}</td><td><span class="badge ${x.privacy==='P2'?'badge-gold':'badge-primary'}">${x.privacy}</span></td><td>${x.purpose}</td><td><span class="badge ${x.status==='正式'?'badge-olive':x.status==='隔离'?'badge-destructive':'badge-gold'}">${x.status}</span></td><td><button class="btn btn-ghost btn-sm" data-ds-card="${x.id}">数据卡</button></td></tr>`).join('')}</tbody></table><div class="small muted" style="margin:8px 0 26px">显示 ${shown.length} / ${datasets.length} 个数据集</div>
+    <div class="history-head">版本与交付<span class="head-badge">质量和授权通过后才能交付</span></div><table class="report-table"><thead><tr><th>数据版本</th><th>来源任务</th><th>质量报告</th><th>允许范围</th><th>交付对象</th><th>状态</th></tr></thead><tbody><tr><td>企业内网攻防轨迹 v1.4</td><td>TASK-0930-018</td><td>96.8 · 42 条隔离</td><td>项目内训练 / 复测</td><td>企业 Agent 团队</td><td><span class="badge badge-gold">待客户确认</span></td></tr><tr><td>工具调用边界样本 v1.1</td><td>TASK-0930-017</td><td>98.1 · 全部通过</td><td>安全对齐 / 监管评测</td><td>实验室安全组</td><td><span class="badge badge-olive">可交付</span></td></tr></tbody></table>
+    <div class="gate-grid"><div class="gate-card"><span class="badge badge-olive">TRACEABLE</span><h3>来源可追溯</h3><p>每个版本回指生产任务、Run、场景、Agent 和环境快照。</p><b class="mono">100% 已关联</b></div><div class="gate-card"><span class="badge badge-primary">QUALITY</span><h3>质量可量化</h3><p>结构、结果验证、重复、异常和人工复核形成质量报告。</p><b class="mono">96.2 平均质量</b></div><div class="gate-card"><span class="badge badge-gold">ACCESS</span><h3>权限与交付</h3><p>所有者、项目范围、用途、脱敏和保留期随版本冻结。</p><b class="mono">0 未授权流转</b></div></div></div>`;
+  $$('[data-dataset-category]').forEach((button)=>button.addEventListener('click',()=>{enterpriseDatasetState930.category=button.dataset.datasetCategory;renderDataEngine930();}));
+  $$('[data-ds-card]').forEach((button)=>button.addEventListener('click',()=>openDatasetCard930(datasets.find((x)=>x.id===button.dataset.dsCard))));
 }
+
+router();

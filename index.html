@@ -8,86 +8,51 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="tokens.css?v=400">
-<link rel="stylesheet" href="styles.css?v=400">
+<link rel="stylesheet" href="tokens.css?v=412">
+<link rel="stylesheet" href="styles.css?v=412">
 </head>
 <body>
   <div id="app">
-    <!-- 左侧抽屉式可收缩侧边导航（V3.5 信息架构：态势感知 / 操作中心 / 资源中心） -->
+    <!-- 角色独立产品空间：导航由 app.js 按当前演示身份生成 -->
     <aside class="sidebar" id="sidebar">
       <div class="sb-brand">
         <span class="sb-mark serif">CR</span>
         <div class="sb-brand-text">
           <span class="sb-brand-name serif">网安攻防演练场</span>
-          <span class="sb-brand-sub">CYBERSEC RANGE · 930</span>
+          <span class="sb-brand-sub" id="sb-space-name">研究员空间 · 930</span>
         </div>
       </div>
-      <div class="role-switcher">
-        <label for="role-switch">当前用户空间</label>
-        <select id="role-switch" aria-label="切换用户空间">
-          <option value="training">训练用户 · 研究员</option>
-          <option value="regulatory">监管用户 · 评测人员</option>
-          <option value="enterprise">开发者与企业用户</option>
-        </select>
-        <small id="role-desc">消费授权数据集并回填效果</small>
-      </div>
-      <nav class="sb-nav" id="sidenav">
-        <a href="#/workspace" data-route="workspace">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
-          <span class="sb-label">角色总览</span><span class="sb-tip">角色总览</span>
-        </a>
-        <div class="sb-group">当前角色任务</div>
-        <a href="#/training-data" data-route="training-data" data-role-nav="training">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="3.5" rx="5.5" ry="2.2"/><path d="M2.5 3.5v8.5c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V3.5M2.5 7.8C2.5 9 5 10 8 10s5.5-1 5.5-2.2"/></svg>
-          <span class="sb-label">训练数据消费</span><span class="sb-tip">训练数据消费</span>
-        </a>
-        <a href="#/tasks" data-route="regulatory" data-role-nav="regulatory">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2h8v12H4z"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
-          <span class="sb-label">监管评测</span><span class="run-dot" id="run-dot" style="display:none"></span><span class="judge-dot" id="judge-dot" style="display:none"></span><span class="sb-tip">监管评测</span>
-        </a>
-        <a href="#/production" data-route="production" data-role-nav="enterprise">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 5h12v8H2zM5 2h6v3H5z"/><path d="M5 9h6M8 6v6"/></svg>
-          <span class="sb-label">数据生产</span><span class="sb-tip">数据生产</span>
-        </a>
-        <div class="sb-group">共享能力</div>
-        <a href="#/data" data-route="data">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3h12v10H2z"/><path d="M5 6h6M5 9h6"/></svg>
-          <span class="sb-label">数据引擎</span><span class="sb-tip">数据引擎</span>
-        </a>
-        <a href="#/range-hall" data-route="range-hall">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 13V6l6-4 6 4v7z"/><path d="M5 13V9h6v4"/></svg>
-          <span class="sb-label">场景与任务库</span><span class="sb-tip">场景与任务库</span>
-        </a>
-        <a href="#/gateway" data-route="gateway">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 8.5 10 4.5M8 10.5l2-2M4 12l-1.5 1.5a2.1 2.1 0 1 1-3-3L3 7m10 5 1.5 1.5a2.1 2.1 0 1 0 3-3L13 7" transform="translate(0,-1)"/></svg>
-          <span class="sb-label">资源接入</span><span class="sb-tip">资源接入</span>
-        </a>
-        <div class="sb-group">系统</div>
-        <a href="#/settings" data-route="settings">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5" r="2.6"/><path d="M2.5 14c.8-2.6 2.9-4 5.5-4s4.7 1.4 5.5 4"/></svg>
-          <span class="sb-label">个人与权限</span><span class="sb-tip">个人与权限</span>
-        </a>
-      </nav>
+      <nav class="sb-nav" id="sidenav" aria-label="当前产品空间导航"></nav>
       <div class="sb-spacer"></div>
       <button class="sb-collapse" id="sb-collapse" title="收起导航">« <span class="sb-label">收起导航</span></button>
       <div class="sb-foot">
         <button class="btn btn-ghost sb-theme" id="theme-toggle" title="切换深/浅主题" aria-label="切换主题">
           <span id="theme-icon">◑</span>
         </button>
-        <!-- 用户区（V3.5：本期不做权限管理，仅个人中心 / 退出登录） -->
         <div class="user-center" id="user-center">
-          <button class="btn btn-ghost uc-btn" id="user-center-btn" aria-haspopup="true" aria-expanded="false" title="用户">
-            <span class="uc-avatar">OP</span>
-            <span class="uc-name">operator</span>
+          <button class="btn btn-ghost uc-btn" id="user-center-btn" aria-haspopup="true" aria-expanded="false" title="用户与演示身份">
+            <span class="uc-avatar" id="uc-avatar">研</span>
+            <span class="uc-name"><b id="uc-name">实验室研究员</b><small id="uc-space">研究员空间</small></span>
           </button>
           <div class="uc-pop" id="user-pop" hidden>
             <div class="uc-pop-head">
-              <span class="uc-avatar uc-avatar-lg">OP</span>
+              <span class="uc-avatar uc-avatar-lg" id="uc-pop-avatar">研</span>
               <div class="uc-pop-id">
-                <strong>operator</strong>
-                <span class="muted small">SSO 已登录 · aisr.lab</span>
+                <strong id="uc-pop-name">实验室研究员</strong>
+                <span class="muted small" id="uc-pop-space">研究员空间 · SSO 已登录</span>
               </div>
             </div>
+            <div class="uc-pop-sep"></div>
+            <div class="uc-pop-label">切换演示身份</div>
+            <button class="uc-role-item" data-demo-role="training">
+              <span class="uc-role-main"><b>实验室研究员</b><small class="muted">训练任务与模型结果</small></span><span class="uc-check">✓</span>
+            </button>
+            <button class="uc-role-item" data-demo-role="regulatory">
+              <span class="uc-role-main"><b>监管评测人员</b><small class="muted">评测任务与可信报告</small></span><span class="uc-check">✓</span>
+            </button>
+            <button class="uc-role-item" data-demo-role="enterprise">
+              <span class="uc-role-main"><b>开发者与企业用户</b><small class="muted">数据集与生产管线</small></span><span class="uc-check">✓</span>
+            </button>
             <div class="uc-pop-sep"></div>
             <button class="uc-role-item" id="uc-profile">
               <span class="uc-role-main"><b>个人中心</b><small class="muted">资料 / 安全设置 / 我的 API 密钥</small></span>
@@ -100,14 +65,12 @@
       </div>
     </aside>
 
-    <!-- 各视图由 app.js 渲染 -->
     <main id="view"></main>
   </div>
 
-  <!-- 弹窗挂载点 -->
   <div id="modal-root"></div>
 
-  <script src="data.js?v=400"></script>
-  <script src="app.js?v=400"></script>
+  <script src="data.js?v=412"></script>
+  <script src="app.js?v=412"></script>
 </body>
 </html>
